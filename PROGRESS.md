@@ -17,12 +17,20 @@
 
 - Documentation baseline committed as `185bfca`.
 - Git repository initialized locally.
+- Separate `frontend/` and `backend/` application boundaries created.
+- PostgreSQL + Prisma schema and migrations committed in `a144dfe`.
+- Level 1 backend: authentication, secure cookie sessions, CSRF, four-role hierarchy, one-school scope, users, temporary-password changes, session revocation, school settings, sessions, classes, teacher assignment, audit events, private document storage adapter, and `/health` readiness endpoint.
+- Level 2 backend: admission applications, duplicate suggestions, staged decisions, capacity validation, atomic admission-number allocation, retry-safe enrollment, family/guardian/sibling records, enrollment history, Student 360, Teacher classroom scope, and document metadata/uploads.
+- Level 1–2 frontend committed in `e904109`: login/password-change, role-aware dashboard shell, users, academic setup, applications, review/enrollment, student registry, Student 360, audit history, responsive UI, and API reconnect state.
+- PostgreSQL integration suite covers six Level 1–2 workflow/security scenarios.
 
-## In progress — not yet verified
+## Verified
 
-- NestJS/Prisma/PostgreSQL backend and Next.js frontend in separate folders.
-- Levels 1–2 features and permission/integration tests.
-- The initial uncommitted JSON prototype was replaced with PostgreSQL before implementation; no production financial/student data uses local JSON.
+- `backend` TypeScript/NestJS build passes.
+- `frontend` Next.js production build passes.
+- Prisma schema validation, migration deployment, and seed pass against temporary local PostgreSQL 18.
+- `npm test` passes: 6 tests, including role boundaries, CSRF, idempotent enrollment retry, unique admission numbers, capacity, Teacher scope, stale edits, documents, and session revocation.
+- `/health` responds with `{ "status": "ok" }` when API and database are ready.
 
 ## Current implementation contract
 
@@ -47,7 +55,35 @@
 
 ## Next coding milestone
 
-Finish and verify Levels 1–2 before starting Level 3. Level 3 adds versioned Admin-managed fee plans, obligations, balances, hostel/transport fee integration, and calculation previews.
+Level 1–2 is committed and verified. The next milestone is Level 3: versioned Admin-managed fee plans, obligations, balances, hostel/transport fee integration, and calculation previews. Do not record real payments until Levels 3–4 are implemented and financially tested.
+
+## Commit history for continuation
+
+```text
+e904109 feat: add levels 1 and 2 staff frontend
+a144dfe feat: implement levels 1 and 2 backend
+29af1ef chore: scaffold PostgreSQL backend and resumable workspace
+185bfca docs: establish revised ERP requirements baseline
+```
+
+## Exact resume commands
+
+```bash
+git status
+git log --oneline --decorate -10
+cd backend
+npm install
+# Start a disposable local database using Docker or: npm run db:local
+npm run db:migrate
+SEED_SUPERADMIN_PASSWORD='at-least-12-characters' npm run db:seed
+npm run start:dev
+# In another terminal:
+cd frontend
+npm install
+npm run dev
+```
+
+The first local sign-in must use the email configured by `SEED_SUPERADMIN_EMAIL` and the password supplied to `SEED_SUPERADMIN_PASSWORD`. The seed never overwrites an existing password. Do not commit `.env` files, local uploads, or database data.
 
 ## Verification record
 

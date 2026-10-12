@@ -15,17 +15,19 @@ Levels 1 and 2 are now being implemented in separate application folders:
 - `backend/` — NestJS API, Prisma migrations, and PostgreSQL persistence.
 - `frontend/` — Next.js/React staff application.
 - `PROGRESS.md` — resume instructions, completed work, remaining work, and the next milestone.
+- `backend/README.md` and `frontend/README.md` — application-specific local setup, features, and next work.
 
 Run the local applications with:
 
 ```bash
 npm --prefix backend install
 npm --prefix frontend install
+npm --prefix backend run db:migrate
 npm --prefix backend run start:dev
 npm --prefix frontend run dev
 ```
 
-The development API starts on `http://localhost:4000`; the frontend starts on `http://localhost:3000`. See `backend/.env.example`, `frontend/.env.example`, and `PROGRESS.md` for the local workflow.
+The development API starts on `http://localhost:4000`; the frontend starts on `http://localhost:3000`. Start PostgreSQL with `docker compose up -d db` or `npm --prefix backend run db:local`, then run the seed described in `backend/README.md`. See `backend/.env.example`, `frontend/.env.example`, and `PROGRESS.md` for the local workflow.
 
 | Document | Purpose |
 |---|---|
