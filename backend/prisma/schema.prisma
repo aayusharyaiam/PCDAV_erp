@@ -51,6 +51,7 @@ model User {
   updatedAt    DateTime @updatedAt
   sessions     LoginSession[]
   @@index([schoolId, role, active])
+  @@unique([id, schoolId])
 }
 
 model LoginSession {
