@@ -66,6 +66,14 @@ a144dfe feat: implement levels 1 and 2 backend
 185bfca docs: establish revised ERP requirements baseline
 ```
 
+After the initial feature commits, the following small fixes were committed:
+
+```text
+ddae400 fix: align local seed sign-in hint
+6949542 fix: add shared backend date helpers
+3831ea0 docs: record levels 1 and 2 progress
+```
+
 ## Exact resume commands
 
 ```bash
