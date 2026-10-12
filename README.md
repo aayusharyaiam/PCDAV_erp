@@ -8,6 +8,25 @@
 
 ## Start here
 
+## Implementation status
+
+Levels 1 and 2 are now being implemented in separate application folders:
+
+- `backend/` — NestJS API, Prisma migrations, and PostgreSQL persistence.
+- `frontend/` — Next.js/React staff application.
+- `PROGRESS.md` — resume instructions, completed work, remaining work, and the next milestone.
+
+Run the local applications with:
+
+```bash
+npm --prefix backend install
+npm --prefix frontend install
+npm --prefix backend run start:dev
+npm --prefix frontend run dev
+```
+
+The development API starts on `http://localhost:4000`; the frontend starts on `http://localhost:3000`. See `backend/.env.example`, `frontend/.env.example`, and `PROGRESS.md` for the local workflow.
+
 | Document | Purpose |
 |---|---|
 | [feature-audit.md](feature-audit.md) | Existing modules, options, workflows, evidence sources, observed problems, and coverage limitations. |

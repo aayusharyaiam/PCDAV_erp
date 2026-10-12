@@ -1,0 +1,235 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  ACCOUNTANT
+  TEACHER
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  WAITLISTED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+  ENROLLED
+}
+
+model School {
+  id              String @id @default(uuid())
+  name            String
+  address         String @default("")
+  phone           String @default("")
+  email           String @default("")
+  timezone        String @default("Asia/Kolkata")
+  admissionPrefix String @default("PDAV")
+  nextAdmission   Int @default(1)
+  version         Int @default(1)
+}
+
+model User {
+  id           String @id @default(uuid())
+  schoolId     String
+  name         String
+  email        String @unique
+  passwordHash String
+  role         Role
+  active       Boolean @default(true)
+  mustChangePassword Boolean @default(true)
+  version      Int @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  sessions     LoginSession[]
+  @@index([schoolId, role, active])
+}
+
+model LoginSession {
+  id        String @id @default(uuid())
+  tokenHash String @unique
+  csrfToken String
+  userId    String
+  user      User @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  @@index([userId])
+}
+
+model LoginAttempt {
+  key         String @id
+  attempts    Int
+  windowStart DateTime
+}
+
+model AcademicSession {
+  id             String @id @default(uuid())
+  schoolId       String
+  name           String
+  startDate      DateTime @db.Date
+  endDate        DateTime @db.Date
+  current        Boolean @default(false)
+  admissionsOpen Boolean @default(true)
+  @@unique([schoolId, name])
+  @@unique([id, schoolId])
+}
+
+model Subject {
+  id       String @id @default(uuid())
+  schoolId String
+  code     String
+  name     String
+  @@unique([schoolId, code])
+}
+
+model ClassOffering {
+  id          String @id @default(uuid())
+  schoolId    String
+  sessionId   String
+  grade       String
+  section     String
+  stream      String @default("")
+  capacity    Int
+  subjectIds  String[] @default([])
+  nextClassId String?
+  version     Int @default(1)
+  @@unique([schoolId, sessionId, grade, section, stream])
+  @@unique([id, schoolId])
+}
+
+model TeacherAssignment {
+  id        String @id @default(uuid())
+  schoolId  String
+  sessionId String
+  teacherId String
+  classId   String
+  startDate DateTime @db.Date
+  endDate   DateTime? @db.Date
+  endedAt   DateTime?
+  assignedBy String
+  @@index([schoolId, teacherId, sessionId])
+}
+
+model Family {
+  id       String @id @default(uuid())
+  schoolId String
+  label    String
+  @@unique([id, schoolId])
+}
+
+model Guardian {
+  id           String @id @default(uuid())
+  schoolId     String
+  familyId     String
+  name         String
+  relationship String
+  phone        String
+  email        String @default("")
+  address      String @default("")
+  @@index([schoolId, familyId])
+}
+
+model Application {
+  id             String @id @default(uuid())
+  schoolId       String
+  sessionId      String
+  studentName    String
+  dateOfBirth    DateTime @db.Date
+  gender         String
+  guardianName   String
+  guardianPhone  String
+  guardianEmail  String @default("")
+  relationship   String @default("Guardian")
+  address        String @default("")
+  permanentAddress String @default("")
+  previousSchool String @default("")
+  appliedGrade   String
+  source         String
+  nextFollowUp   DateTime? @db.Date
+  notes          String @default("")
+  status         ApplicationStatus @default(DRAFT)
+  documentChecklist Json @default("[]")
+  ews            Boolean @default(false)
+  version        Int @default(1)
+  studentId      String? @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@index([schoolId, sessionId, status])
+}
+
+model Student {
+  id               String @id @default(uuid())
+  schoolId         String
+  admissionNumber  String
+  name             String
+  dateOfBirth      DateTime @db.Date
+  gender           String
+  familyId         String
+  admissionDate    DateTime @db.Date
+  address          String @default("")
+  permanentAddress String @default("")
+  previousSchool   String @default("")
+  status           String @default("ACTIVE")
+  version          Int @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  @@unique([schoolId, admissionNumber])
+  @@unique([id, schoolId])
+  @@index([schoolId, name])
+}
+
+model Enrollment {
+  id        String @id @default(uuid())
+  schoolId  String
+  studentId String
+  sessionId String
+  classId   String
+  status    String @default("ACTIVE")
+  entryType String @default("NEW_ADMISSION")
+  feeCategory String @default("GENERAL")
+  ews       Boolean @default(false)
+  startDate DateTime @db.Date
+  endDate   DateTime? @db.Date
+  @@unique([schoolId, studentId, sessionId])
+  @@index([schoolId, sessionId, classId, status])
+}
+
+model Document {
+  id            String @id @default(uuid())
+  schoolId      String
+  studentId     String?
+  applicationId String?
+  type          String
+  originalName  String
+  storageKey    String @unique
+  mimeType      String
+  size          Int
+  sha256        String
+  verifiedAt    DateTime?
+  verifiedBy    String?
+  uploadedBy    String
+  createdAt     DateTime @default(now())
+  @@index([schoolId, studentId])
+}
+
+model AuditEvent {
+  id         String @id @default(uuid())
+  schoolId   String
+  actorId    String
+  action     String
+  entityType String
+  entityId   String
+  reason     String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+  @@index([schoolId, createdAt])
+  @@index([schoolId, entityId])
+}
