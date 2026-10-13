@@ -10,7 +10,7 @@ import { Db } from './db';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000', credentials: true, allowedHeaders: ['Content-Type', 'X-CSRF-Token'] });
+  app.enableCors({ origin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000', credentials: true, allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'Idempotency-Key'] });
   app.use(helmet());
   app.use(cookieParser());
   app.setGlobalPrefix('api/v1');

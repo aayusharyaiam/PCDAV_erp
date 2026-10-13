@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 const email = process.env.E2E_EMAIL ?? 'superadmin@pcdav.local';
 const password = process.env.E2E_PASSWORD ?? 'ChangeMe123!Long';
 
-test.describe('Levels 1–2 staff workflows', () => {
+test.describe('Levels 1–3 staff workflows', () => {
   test('signs in and renders the role-aware dashboard', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
@@ -37,6 +37,30 @@ test.describe('Levels 1–2 staff workflows', () => {
     await expect(page.getByRole('heading', { name: 'Academic setup' })).toBeVisible();
     await page.getByRole('link', { name: 'Audit history' }).click();
     await expect(page.getByRole('heading', { name: 'Audit history' })).toBeVisible();
+  });
+
+  test('loads the Level 3 fee, ledger, and service workspaces through the same-origin API', async ({ page }) => {
+    await signIn(page);
+    await page.getByRole('link', { name: 'Fee plans' }).click();
+    await expect(page.getByRole('heading', { name: 'Fee plans' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Fee heads' })).toBeVisible();
+    await page.getByRole('link', { name: 'Fee ledger' }).click();
+    await expect(page.getByRole('heading', { name: 'Student fee ledger' })).toBeVisible();
+    await page.getByPlaceholder('Search by admission number or name').fill('PDAV-0001');
+    await page.getByRole('button', { name: 'Find student' }).click();
+    await expect(page.getByText('PDAV-0001')).toBeVisible();
+    await page.getByRole('link', { name: 'Transport & hostel' }).click();
+    await expect(page.getByRole('heading', { name: 'Transport & hostel assignments' })).toBeVisible();
+  });
+
+  test('loads transport and store management workspaces', async ({ page }) => {
+    await signIn(page);
+    await page.getByRole('link', { name: 'Transport management' }).click();
+    await expect(page.getByRole('heading', { name: 'Routes, vehicles & student allocation' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Route master' })).toBeVisible();
+    await page.getByRole('link', { name: 'Store management' }).click();
+    await expect(page.getByRole('heading', { name: 'Inventory, student issues & balances' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Store masters' })).toBeVisible();
   });
 
   test('keeps the main staff workflows usable on a mobile viewport', async ({ page }) => {

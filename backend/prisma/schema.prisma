@@ -33,51 +33,54 @@ model School {
   email           String @default("")
   timezone        String @default("Asia/Kolkata")
   admissionPrefix String @default("PDAV")
-  nextAdmission   Int @default(1)
-  version         Int @default(1)
+  nextAdmission   Int    @default(1)
+  version         Int    @default(1)
 }
 
 model User {
-  id           String @id @default(uuid())
-  schoolId     String
-  name         String
-  email        String @unique
-  passwordHash String
-  role         Role
-  active       Boolean @default(true)
-  mustChangePassword Boolean @default(true)
-  version      Int @default(1)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  sessions     LoginSession[]
-  @@index([schoolId, role, active])
+  id                 String         @id @default(uuid())
+  schoolId           String
+  name               String
+  email              String         @unique
+  passwordHash       String
+  role               Role
+  active             Boolean        @default(true)
+  mustChangePassword Boolean        @default(true)
+  version            Int            @default(1)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  sessions           LoginSession[]
+
   @@unique([id, schoolId])
+  @@index([schoolId, role, active])
 }
 
 model LoginSession {
-  id        String @id @default(uuid())
-  tokenHash String @unique
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
   csrfToken String
   userId    String
-  user      User @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
   expiresAt DateTime
+
   @@index([userId])
 }
 
 model LoginAttempt {
-  key         String @id
+  key         String   @id
   attempts    Int
   windowStart DateTime
 }
 
 model AcademicSession {
-  id             String @id @default(uuid())
+  id             String   @id @default(uuid())
   schoolId       String
   name           String
   startDate      DateTime @db.Date
   endDate        DateTime @db.Date
-  current        Boolean @default(false)
-  admissionsOpen Boolean @default(true)
+  current        Boolean  @default(false)
+  admissionsOpen Boolean  @default(true)
+
   @@unique([schoolId, name])
   @@unique([id, schoolId])
 }
@@ -87,34 +90,37 @@ model Subject {
   schoolId String
   code     String
   name     String
+
   @@unique([schoolId, code])
 }
 
 model ClassOffering {
-  id          String @id @default(uuid())
+  id          String   @id @default(uuid())
   schoolId    String
   sessionId   String
   grade       String
   section     String
-  stream      String @default("")
+  stream      String   @default("")
   capacity    Int
   subjectIds  String[] @default([])
   nextClassId String?
-  version     Int @default(1)
+  version     Int      @default(1)
+
   @@unique([schoolId, sessionId, grade, section, stream])
   @@unique([id, schoolId])
 }
 
 model TeacherAssignment {
-  id        String @id @default(uuid())
-  schoolId  String
-  sessionId String
-  teacherId String
-  classId   String
-  startDate DateTime @db.Date
-  endDate   DateTime? @db.Date
-  endedAt   DateTime?
+  id         String    @id @default(uuid())
+  schoolId   String
+  sessionId  String
+  teacherId  String
+  classId    String
+  startDate  DateTime  @db.Date
+  endDate    DateTime? @db.Date
+  endedAt    DateTime?
   assignedBy String
+
   @@index([schoolId, teacherId, sessionId])
 }
 
@@ -122,6 +128,7 @@ model Family {
   id       String @id @default(uuid())
   schoolId String
   label    String
+
   @@unique([id, schoolId])
 }
 
@@ -134,39 +141,42 @@ model Guardian {
   phone        String
   email        String @default("")
   address      String @default("")
+
   @@index([schoolId, familyId])
 }
 
 model Application {
-  id             String @id @default(uuid())
-  schoolId       String
-  sessionId      String
-  studentName    String
-  dateOfBirth    DateTime @db.Date
-  gender         String
-  guardianName   String
-  guardianPhone  String
-  guardianEmail  String @default("")
-  relationship   String @default("Guardian")
-  address        String @default("")
-  permanentAddress String @default("")
-  previousSchool String @default("")
-  appliedGrade   String
-  source         String
-  nextFollowUp   DateTime? @db.Date
-  notes          String @default("")
-  status         ApplicationStatus @default(DRAFT)
-  documentChecklist Json @default("[]")
-  ews            Boolean @default(false)
-  version        Int @default(1)
-  studentId      String? @unique
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                String            @id @default(uuid())
+  schoolId          String
+  sessionId         String
+  studentName       String
+  dateOfBirth       DateTime          @db.Date
+  gender            String
+  guardianName      String
+  guardianPhone     String
+  guardianEmail     String            @default("")
+  relationship      String            @default("Guardian")
+  address           String            @default("")
+  permanentAddress  String            @default("")
+  previousSchool    String            @default("")
+  appliedGrade      String
+  source            String
+  nextFollowUp      DateTime?         @db.Date
+  notes             String            @default("")
+  status            ApplicationStatus @default(DRAFT)
+  documentChecklist Json              @default("[]")
+  ews               Boolean           @default(false)
+  version           Int               @default(1)
+  studentId         String?           @unique
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@unique([id, schoolId], map: "Application_id_school_unique")
   @@index([schoolId, sessionId, status])
 }
 
 model Student {
-  id               String @id @default(uuid())
+  id               String   @id @default(uuid())
   schoolId         String
   admissionNumber  String
   name             String
@@ -174,54 +184,603 @@ model Student {
   gender           String
   familyId         String
   admissionDate    DateTime @db.Date
-  address          String @default("")
-  permanentAddress String @default("")
-  previousSchool   String @default("")
-  status           String @default("ACTIVE")
-  version          Int @default(1)
+  address          String   @default("")
+  permanentAddress String   @default("")
+  previousSchool   String   @default("")
+  status           String   @default("ACTIVE")
+  version          Int      @default(1)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+
   @@unique([schoolId, admissionNumber])
   @@unique([id, schoolId])
   @@index([schoolId, name])
 }
 
 model Enrollment {
-  id        String @id @default(uuid())
-  schoolId  String
-  studentId String
-  sessionId String
-  classId   String
-  status    String @default("ACTIVE")
-  entryType String @default("NEW_ADMISSION")
-  feeCategory String @default("GENERAL")
-  ews       Boolean @default(false)
-  startDate DateTime @db.Date
-  endDate   DateTime? @db.Date
+  id          String    @id @default(uuid())
+  schoolId    String
+  studentId   String
+  sessionId   String
+  classId     String
+  status      String    @default("ACTIVE")
+  entryType   String    @default("NEW_ADMISSION")
+  feeCategory String    @default("GENERAL")
+  ews         Boolean   @default(false)
+  startDate   DateTime  @db.Date
+  endDate     DateTime? @db.Date
+
   @@unique([schoolId, studentId, sessionId])
   @@index([schoolId, sessionId, classId, status])
 }
 
 model Document {
-  id            String @id @default(uuid())
+  id            String    @id @default(uuid())
   schoolId      String
   studentId     String?
   applicationId String?
   type          String
   originalName  String
-  storageKey    String @unique
+  storageKey    String    @unique
   mimeType      String
   size          Int
   sha256        String
   verifiedAt    DateTime?
   verifiedBy    String?
   uploadedBy    String
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
+
   @@index([schoolId, studentId])
 }
 
-model AuditEvent {
+model FeeHead {
+  id        String   @id @default(uuid())
+  schoolId  String
+  code      String
+  name      String
+  category  String
+  active    Boolean  @default(true)
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([schoolId, code])
+  @@unique([id, schoolId])
+  @@index([schoolId, active])
+}
+
+model FeePlan {
+  id        String   @id @default(uuid())
+  schoolId  String
+  sessionId String
+  name      String
+  status    String   @default("DRAFT")
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([schoolId, sessionId, name])
+  @@unique([id, schoolId])
+}
+
+model FeePlanVersion {
+  id            String    @id @default(uuid())
+  schoolId      String
+  planId        String
+  sessionId     String
+  versionNumber Int
+  status        String    @default("DRAFT")
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  createdBy     String
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@unique([planId, versionNumber])
+  @@unique([id, schoolId])
+  @@index([schoolId, sessionId, status])
+}
+
+model FeeRule {
+  id              String   @id @default(uuid())
+  schoolId        String
+  versionId       String
+  feeHeadId       String
+  classId         String?
+  frequency       String
+  amountMinor     BigInt
+  assessmentMonth Int?
+  entryType       String   @default("ALL")
+  category        String   @default("ALL")
+  dueDay          Int      @default(10)
+  createdAt       DateTime @default(now())
+
+  @@index([schoolId, versionId, classId])
+  @@index([schoolId, feeHeadId])
+}
+
+model ServiceAssignment {
+  id           String    @id @default(uuid())
+  schoolId     String
+  enrollmentId String
+  type         String
+  label        String
+  amountMinor  BigInt
+  frequency    String    @default("MONTHLY")
+  startDate    DateTime  @db.Date
+  endDate      DateTime? @db.Date
+  active       Boolean   @default(true)
+  routeId      String?
+  vehicleId    String?
+  assignedBy   String
+  createdAt    DateTime  @default(now())
+
+  @@index([schoolId, enrollmentId, type, active])
+  @@index([schoolId, routeId, startDate, endDate])
+  @@index([schoolId, vehicleId, startDate, endDate])
+}
+
+model TransportRoute {
+  id                 String   @id @default(uuid())
+  schoolId           String
+  name               String
+  campus             String   @default("")
+  destination        String   @default("")
+  monthlyAmountMinor BigInt
+  capacity           Int?
+  active             Boolean  @default(true)
+  version            Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([schoolId, name])
+  @@unique([id, schoolId])
+  @@index([schoolId, active])
+}
+
+model TransportVehicle {
+  id           String   @id @default(uuid())
+  schoolId     String
+  name         String
+  busNumber    String
+  capacity     Int
+  driver1Name  String   @default("")
+  driver1Phone String   @default("")
+  driver2Name  String   @default("")
+  driver2Phone String   @default("")
+  active       Boolean  @default(true)
+  version      Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([schoolId, busNumber])
+  @@unique([id, schoolId])
+  @@index([schoolId, active])
+}
+
+model FeeCredit {
+  id              String   @id @default(uuid())
+  schoolId        String
+  studentId       String
+  amountMinor     BigInt
+  remainingMinor  BigInt
+  source          String
+  sourcePaymentId String?  @unique
+  reason          String
+  createdBy       String
+  createdAt       DateTime @default(now())
+
+  @@index([schoolId, studentId, remainingMinor])
+}
+
+model FeeObligation {
+  id                  String   @id @default(uuid())
+  schoolId            String
+  studentId           String
+  enrollmentId        String
+  feeHeadId           String
+  feeRuleId           String?
+  serviceAssignmentId String?
+  periodKey           String
+  dueDate             DateTime @db.Date
+  amountMinor         BigInt
+  creditAppliedMinor  BigInt   @default(0)
+  paidMinor           BigInt   @default(0)
+  status              String   @default("OPEN")
+  assessedAt          DateTime @default(now())
+
+  @@unique([schoolId, enrollmentId, feeHeadId, periodKey])
+  @@index([schoolId, studentId, dueDate, status])
+  @@index([schoolId, enrollmentId, periodKey])
+}
+
+model StoreGroup {
+  id          String   @id @default(uuid())
+  schoolId    String
+  code        String
+  name        String
+  description String   @default("")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([schoolId, code])
+  @@unique([id, schoolId])
+  @@index([schoolId, active])
+}
+
+model StoreVendor {
+  id             String   @id @default(uuid())
+  schoolId       String
+  name           String
+  address        String   @default("")
+  phone          String   @default("")
+  email          String   @default("")
+  contactName    String   @default("")
+  contactAddress String   @default("")
+  contactPhone   String   @default("")
+  bankAccount    String   @default("")
+  bankName       String   @default("")
+  ifsc           String   @default("")
+  upi            String   @default("")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([schoolId, name])
+  @@unique([id, schoolId])
+  @@index([schoolId, active])
+}
+
+model StoreCluster {
+  id        String   @id @default(uuid())
+  schoolId  String
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([schoolId, name])
+  @@unique([id, schoolId])
+  @@index([schoolId, active])
+}
+
+model StoreClusterLine {
+  id        String @id @default(uuid())
+  schoolId  String
+  clusterId String
+  productId String
+  quantity  Int
+
+  @@unique([clusterId, productId])
+  @@index([schoolId, clusterId])
+  @@index([schoolId, productId])
+}
+
+model StoreProduct {
+  id            String   @id @default(uuid())
+  schoolId      String
+  name          String
+  description   String   @default("")
+  groupId       String?
+  unitCostMinor BigInt
+  alertQuantity Int      @default(0)
+  quantity      Int      @default(0)
+  active        Boolean  @default(true)
+  version       Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([schoolId, name])
+  @@unique([id, schoolId])
+  @@index([schoolId, active, quantity])
+  @@index([schoolId, groupId])
+}
+
+model StoreStockReceipt {
+  id            String   @id @default(uuid())
+  schoolId      String
+  receiptNumber String
+  vendorId      String?
+  receivedAt    DateTime @db.Date
+  totalMinor    BigInt
+  reason        String
+  createdBy     String
+  createdAt     DateTime @default(now())
+
+  @@unique([schoolId, receiptNumber])
+  @@unique([id, schoolId])
+  @@index([schoolId, receivedAt])
+}
+
+model StoreStockReceiptLine {
+  id            String @id @default(uuid())
+  schoolId      String
+  receiptId     String
+  productId     String
+  quantity      Int
+  unitCostMinor BigInt
+  totalMinor    BigInt
+
+  @@index([schoolId, receiptId])
+  @@index([schoolId, productId])
+}
+
+model StoreStockMovement {
+  id            String   @id @default(uuid())
+  schoolId      String
+  productId     String
+  type          String
+  quantityDelta Int
+  unitCostMinor BigInt
+  sourceType    String
+  sourceId      String
+  reason        String
+  actorId       String
+  createdAt     DateTime @default(now())
+
+  @@index([schoolId, productId, createdAt])
+  @@index([schoolId, sourceType, sourceId])
+}
+
+model StoreIssue {
+  id           String   @id @default(uuid())
+  schoolId     String
+  issueNumber  String
+  studentId    String
+  enrollmentId String
+  issuedAt     DateTime @db.Date
+  status       String   @default("OPEN")
+  totalMinor   BigInt
+  paidMinor    BigInt   @default(0)
+  reason       String
+  createdBy    String
+  createdAt    DateTime @default(now())
+
+  @@unique([schoolId, issueNumber])
+  @@unique([id, schoolId])
+  @@index([schoolId, studentId, issuedAt])
+  @@index([schoolId, status, issuedAt])
+}
+
+model StoreIssueLine {
+  id            String @id @default(uuid())
+  schoolId      String
+  issueId       String
+  productId     String
+  quantity      Int
+  unitCostMinor BigInt
+  totalMinor    BigInt
+
+  @@index([schoolId, issueId])
+  @@index([schoolId, productId])
+}
+
+model PaymentQuote {
+  id                        String   @id @default(uuid())
+  schoolId                  String
+  studentId                 String
+  createdBy                 String
+  amountMinor               BigInt
+  availableCreditMinor      BigInt
+  creditAppliedMinor        BigInt
+  paymentAllocatedMinor     BigInt
+  projectedOutstandingMinor BigInt
+  projectedCreditMinor      BigInt
+  allocationPlan            Json
+  version                   Int      @default(1)
+  status                    String   @default("OPEN")
+  expiresAt                 DateTime
+  createdAt                 DateTime @default(now())
+
+  @@unique([id, schoolId])
+  @@index([schoolId, studentId, status, expiresAt])
+  @@index([schoolId, createdAt])
+}
+
+model Payment {
+  id                  String    @id @default(uuid())
+  schoolId            String
+  studentId           String
+  cashierId           String
+  shiftId             String
+  quoteId             String?   @unique
+  idempotencyKey      String
+  requestHash         String
+  businessDate        DateTime  @db.Date
+  mode                String
+  status              String
+  currency            String    @default("INR")
+  receivedAmountMinor BigInt
+  tenderedAmountMinor BigInt?
+  changeMinor         BigInt    @default(0)
+  payerName           String
+  payerPhone          String    @default("")
+  reference           String    @default("")
+  electronicChannel   String    @default("")
+  electronicVerifiedAt DateTime?
+  electronicVerifiedBy String?
+  electronicVerificationNote String?
+  chequeNumber        String    @default("")
+  chequeBank          String    @default("")
+  chequeDate          DateTime? @db.Date
+  createdAt           DateTime  @default(now())
+  capturedAt          DateTime?
+  captureBusinessDate DateTime? @db.Date
+  captureShiftId      String?
+  updatedAt           DateTime  @updatedAt
+  receipt             Receipt?
+  refundCommands      RefundCommand[]
+
+  @@unique([id, schoolId])
+  @@unique([schoolId, cashierId, idempotencyKey])
+  @@index([schoolId, studentId, businessDate])
+  @@index([schoolId, status, businessDate])
+  @@index([schoolId, shiftId, mode, status])
+  // Partial expression unique index Payment_electronic_reference_key is in SQL:
+  // school/channel/trim(reference), for MANUAL_ELECTRONIC in every status.
+}
+
+model PaymentAllocation {
+  id          String   @id @default(uuid())
+  schoolId    String
+  paymentId   String
+  targetType  String
+  targetId    String
+  amountMinor BigInt
+  createdAt   DateTime @default(now())
+
+  @@unique([paymentId, targetType, targetId])
+  @@index([schoolId, targetType, targetId])
+  @@index([schoolId, paymentId])
+}
+
+model PaymentCreditApplication {
+  id          String   @id @default(uuid())
+  schoolId    String
+  paymentId   String
+  creditId    String
+  targetId    String
+  amountMinor BigInt
+  createdAt   DateTime @default(now())
+
+  @@index([schoolId, paymentId])
+  @@index([schoolId, creditId])
+}
+
+model PaymentCreditRelease {
+  id            String   @id @default(uuid())
+  schoolId      String
+  paymentId     String
+  applicationId String   @unique
+  amountMinor   BigInt
+  reason        String
+  createdBy     String
+  createdAt     DateTime @default(now())
+
+  @@index([schoolId, paymentId])
+}
+
+model PaymentAllocationRelease {
+  id           String   @id @default(uuid())
+  schoolId     String
+  paymentId    String
+  allocationId String
+  amountMinor  BigInt
+  reason       String
+  createdBy    String
+  createdAt    DateTime @default(now())
+
+  @@index([schoolId, paymentId])
+  @@index([allocationId])
+}
+
+model PaymentRefund {
+  id           String   @id @default(uuid())
+  schoolId     String
+  paymentId    String
+  shiftId      String?
+  businessDate DateTime @db.Date
+  amountMinor  BigInt
+  reason       String
+  reference    String   @default("")
+  createdBy    String
+  createdAt    DateTime @default(now())
+
+  @@index([schoolId, paymentId, createdAt])
+  @@index([schoolId, shiftId])
+}
+
+model RefundCommand {
+  id             String   @id @default(uuid())
+  schoolId       String
+  actorId        String
+  idempotencyKey String
+  requestHash    String
+  paymentId      String
+  payment        Payment  @relation(fields: [paymentId, schoolId], references: [id, schoolId])
+  result         Json
+  createdAt      DateTime @default(now())
+
+  @@unique([schoolId, actorId, idempotencyKey])
+  @@index([schoolId, paymentId])
+}
+
+model PaymentEvent {
+  id           String   @id @default(uuid())
+  schoolId     String
+  paymentId    String
+  type         String
+  amountMinor  BigInt?
+  reason       String
+  actorId      String
+  businessDate DateTime @db.Date
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([schoolId, paymentId, createdAt])
+  @@index([schoolId, type, createdAt])
+  @@index([schoolId, businessDate, type])
+}
+
+model ReceiptSequence {
   id         String @id @default(uuid())
+  schoolId   String @unique
+  nextNumber Int    @default(1)
+}
+
+model Receipt {
+  id              String   @id @default(uuid())
+  schoolId        String
+  paymentId       String   @unique
+  payment         Payment  @relation(fields: [paymentId, schoolId], references: [id, schoolId])
+  studentId       String
+  receiptNumber   String
+  status          String   @default("ISSUED")
+  pdfStatus       String   @default("UNAVAILABLE")
+  templateVersion String   @default("receipt-v1")
+  snapshot        Json
+  issuedAt        DateTime @default(now())
+
+  @@unique([schoolId, receiptNumber])
+  @@unique([paymentId, schoolId])
+  @@index([schoolId, studentId, issuedAt])
+  @@index([schoolId, status, issuedAt])
+}
+
+model ReceiptEvent {
+  id        String   @id @default(uuid())
+  schoolId  String
+  receiptId String
+  type      String
+  actorId   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([schoolId, receiptId, createdAt])
+}
+
+model CashierShift {
+  id                String    @id @default(uuid())
+  schoolId          String
+  cashierId         String
+  businessDate      DateTime  @db.Date
+  status            String    @default("OPEN")
+  openingFloatMinor BigInt
+  expectedCashMinor BigInt?
+  countedCashMinor  BigInt?
+  varianceMinor     BigInt?
+  openedAt          DateTime  @default(now())
+  closedAt          DateTime?
+  closeReason       String    @default("")
+
+  @@unique([schoolId, cashierId, businessDate])
+  @@index([schoolId, businessDate, status])
+  @@index([schoolId, cashierId, status])
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid())
   schoolId   String
   actorId    String
   action     String
@@ -231,6 +790,7 @@ model AuditEvent {
   before     Json?
   after      Json?
   createdAt  DateTime @default(now())
+
   @@index([schoolId, createdAt])
   @@index([schoolId, entityId])
 }

@@ -11,6 +11,13 @@ async function main() {
   const existingSuperadmin = await db.user.findFirst({ where: { role: 'SUPERADMIN' } });
   if (existingSuperadmin && existingSuperadmin.email !== email.toLowerCase()) throw new Error('One Superadmin already exists; seed does not provision another');
   const school = await db.school.upsert({ where: { id: '00000000-0000-0000-0000-000000000001' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000001', name: 'P DAV PUBLIC SCHOOL', admissionPrefix: 'PDAV' } });
+  const defaultHeads = [
+    ['TUITION', 'Tuition Fee', 'MONTHLY'], ['SCIENCE', 'Science Fee', 'MONTHLY'], ['COMPUTER', 'Computer Fee', 'MONTHLY'],
+    ['ANNUAL_MAINTENANCE', 'Annual Maintenance Fee', 'ANNUAL'], ['EXAMINATION', 'Examination Fee', 'HALF_YEARLY'],
+    ['REGISTRATION', 'Registration Fee', 'NEW_ADMISSION'], ['ADMISSION', 'Admission Charge', 'NEW_ADMISSION'],
+    ['TRANSPORT', 'Transport Fee', 'SERVICE'], ['HOSTEL_ADMISSION', 'Hostel Admission Fee', 'SERVICE'], ['HOSTEL_MONTHLY', 'Hostel Fee', 'SERVICE'],
+  ] as const;
+  for (const [code, name, category] of defaultHeads) await db.feeHead.upsert({ where: { schoolId_code: { schoolId: school.id, code } }, update: { name, category, active: true }, create: { schoolId: school.id, code, name, category } });
   const session = await db.academicSession.upsert({ where: { id: '00000000-0000-0000-0000-000000000002' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000002', schoolId: school.id, name: '2026–2027', startDate: new Date('2026-04-01'), endDate: new Date('2027-03-31'), current: true, admissionsOpen: true } });
   const superadmin = await db.user.upsert({ where: { email: email.toLowerCase() }, update: {}, create: { schoolId: school.id, name: 'Superadmin', email: email.toLowerCase(), passwordHash: await argon2.hash(password), role: 'SUPERADMIN', active: true, mustChangePassword: true } });
   if (!process.argv.includes('--demo')) { console.log(`School and Superadmin ready: ${superadmin.email}. Existing passwords are never overwritten.`); await db.$disconnect(); return; }

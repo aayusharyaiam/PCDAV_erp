@@ -22,6 +22,6 @@ export class Db extends PrismaClient implements OnModuleInit, OnModuleDestroy {
 }
 
 export async function audit(tx: Tx, actor: { id: string; schoolId: string }, action: string, entityType: string, entityId: string, reason: string, before?: unknown, after?: unknown) {
-  const json = (value: unknown) => value === undefined ? undefined : JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+  const json = (value: unknown) => value === undefined ? undefined : JSON.parse(JSON.stringify(value, (_key, item) => typeof item === 'bigint' ? item.toString() : item)) as Prisma.InputJsonValue;
   await tx.auditEvent.create({ data: { schoolId: actor.schoolId, actorId: actor.id, action, entityType, entityId, reason, before: json(before), after: json(after) } });
 }

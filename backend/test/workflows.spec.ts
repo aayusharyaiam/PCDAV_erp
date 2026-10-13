@@ -10,7 +10,7 @@ import { Db } from '../src/db';
 import { ApiErrors } from '../src/errors';
 
 // Uses isolated, generated school IDs in the configured test database. No reset/truncate.
-describe('Levels 1–2 PostgreSQL workflows', () => {
+describe('Levels 1–3 PostgreSQL workflows', () => {
   let app: INestApplication; let db: Db; let schoolId: string; let sessionId: string; let classId: string; let otherClassId: string;
   const suffix = randomUUID(); const password = 'Integration-Initial-123';
   let adminId: string; let teacherId: string; let accountantId: string;
@@ -42,7 +42,10 @@ describe('Levels 1–2 PostgreSQL workflows', () => {
   });
   afterAll(async () => {
     if (db && schoolId) {
+      await db.storeIssueLine.deleteMany({ where: { schoolId } }); await db.storeIssue.deleteMany({ where: { schoolId } }); await db.storeStockMovement.deleteMany({ where: { schoolId } }); await db.storeStockReceiptLine.deleteMany({ where: { schoolId } }); await db.storeStockReceipt.deleteMany({ where: { schoolId } }); await db.storeClusterLine.deleteMany({ where: { schoolId } }); await db.storeCluster.deleteMany({ where: { schoolId } }); await db.storeProduct.deleteMany({ where: { schoolId } }); await db.storeVendor.deleteMany({ where: { schoolId } }); await db.storeGroup.deleteMany({ where: { schoolId } });
+      await db.feeObligation.deleteMany({ where: { schoolId } }); await db.feeCredit.deleteMany({ where: { schoolId } }); await db.serviceAssignment.deleteMany({ where: { schoolId } }); await db.transportVehicle.deleteMany({ where: { schoolId } }); await db.transportRoute.deleteMany({ where: { schoolId } });
       await db.auditEvent.deleteMany({ where: { schoolId } }); await db.document.deleteMany({ where: { schoolId } });
+      await db.feeObligation.deleteMany({ where: { schoolId } }); await db.feeCredit.deleteMany({ where: { schoolId } }); await db.serviceAssignment.deleteMany({ where: { schoolId } }); await db.feeRule.deleteMany({ where: { schoolId } }); await db.feePlanVersion.deleteMany({ where: { schoolId } }); await db.feePlan.deleteMany({ where: { schoolId } }); await db.feeHead.deleteMany({ where: { schoolId } });
       await db.application.deleteMany({ where: { schoolId } }); await db.enrollment.deleteMany({ where: { schoolId } });
       await db.student.deleteMany({ where: { schoolId } }); await db.guardian.deleteMany({ where: { schoolId } }); await db.family.deleteMany({ where: { schoolId } });
       await db.teacherAssignment.deleteMany({ where: { schoolId } });
@@ -104,6 +107,51 @@ describe('Levels 1–2 PostgreSQL workflows', () => {
     await client(teacher, 'patch', `/students/${studentId}`).send({}).expect(403);
   });
 
+  it('creates Admin fee plans, previews/commits idempotent obligations, applies credit, and assesses hostel service fees', async () => {
+    const tuition = await client(admin, 'post', '/fee-heads').send({ code: 'TUITION', name: 'Tuition Fee', category: 'MONTHLY' }).expect(201);
+    const hostel = await client(admin, 'post', '/fee-heads').send({ code: 'HOSTEL_MONTHLY', name: 'Hostel Fee', category: 'SERVICE' }).expect(201);
+    const plan = await client(admin, 'post', '/fee-plans').send({ sessionId, name: `Core Plan ${suffix.slice(0, 8)}`, effectiveFrom: '2026-01-01', rules: [{ feeHeadId: tuition.body.id, classId, frequency: 'MONTHLY', amountMinor: '920000', dueDay: 26 }] }).expect(201);
+    await client(admin, 'post', `/fee-plans/${plan.body.plan.id}/publish`).send({ versionNumber: 1, reason: 'Publish integration fee plan' }).expect(201);
+    const enrollment = await db.enrollment.findFirstOrThrow({ where: { schoolId, studentId } });
+    await client(admin, 'post', '/credits').send({ studentId, amountMinor: '20000', source: 'OPENING_BALANCE', reason: 'Imported opening credit' }).expect(201);
+    const preview = await client(accountant, 'post', '/assessments/preview').send({ enrollmentId: enrollment.id, periods: ['2026-04'] }).expect(201);
+    expect(preview.body.grossMinor).toBe('920000'); expect(preview.body.availableCreditMinor).toBe('20000'); expect(preview.body.projectedNetMinor).toBe('900000');
+    const commitBody = { enrollmentId: enrollment.id, periods: ['2026-04'], reason: 'Assess April fee' };
+    const committed = await client(admin, 'post', '/assessments').send(commitBody).expect(201);
+    expect(committed.body.created).toHaveLength(1); expect(committed.body.skipped).toBe(0);
+    const retry = await client(admin, 'post', '/assessments').send(commitBody).expect(201);
+    expect(retry.body.created).toHaveLength(0); expect(retry.body.skipped).toBe(1);
+    const ledger = await client(accountant, 'get', `/students/${studentId}/ledger`).expect(200);
+    expect(ledger.body.totals.outstandingMinor).toBe('900000'); expect(ledger.body.totals.availableCreditMinor).toBe('0');
+    const service = await client(admin, 'post', '/services/assignments').send({ enrollmentId: enrollment.id, type: 'HOSTEL', label: 'Hostel Block A', amountMinor: '100000', frequency: 'MONTHLY', startDate: '2026-04-01' }).expect(201);
+    await client(admin, 'post', `/services/assignments/${service.body.id}/end`).send({ endDate: '2026-05-15', reason: 'Student left hostel' }).expect(201);
+    const servicePreview = await client(accountant, 'post', '/assessments/preview').send({ enrollmentId: enrollment.id, periods: ['2026-05'] }).expect(201);
+    expect(servicePreview.body.lines.some((line: { serviceAssignmentId?: string; feeHeadId: string }) => line.serviceAssignmentId === service.body.id && line.feeHeadId === hostel.body.id)).toBe(true);
+    await client(accountant, 'post', '/assessments').send(commitBody).expect(403);
+    await client(teacher, 'get', `/students/${studentId}/ledger`).expect(403);
+  });
+
+  it('keeps assessment periods idempotent, versions plans, and applies later credit to older dues', async () => {
+    const version = await client(admin, 'post', `/fee-plans/${(await db.feePlan.findFirstOrThrow({ where: { schoolId, name: { startsWith: 'Core Plan' } } })).id}/versions`).send({ sessionId, name: 'Core Plan version 2', effectiveFrom: '2026-06-01', rules: [{ feeHeadId: (await db.feeHead.findFirstOrThrow({ where: { schoolId, code: 'TUITION' } })).id, classId, frequency: 'MONTHLY', amountMinor: '930000', dueDay: 26 }] }).expect(201);
+    expect(version.body.version.versionNumber).toBe(2);
+    const corePlan = await db.feePlan.findFirstOrThrow({ where: { schoolId, name: { startsWith: 'Core Plan' } } });
+    await client(admin, 'post', `/fee-plans/${corePlan.id}/publish`).send({ versionNumber: 2, reason: 'Publish June fee revision' }).expect(201);
+    await client(accountant, 'post', '/assessments/preview').send({ enrollmentId: (await db.enrollment.findFirstOrThrow({ where: { schoolId, studentId } })).id, periods: ['2026-04'] }).expect(201).expect(res => expect(res.body.lines.find((line: { feeHeadCode: string }) => line.feeHeadCode === 'TUITION').amountMinor).toBe('920000'));
+    await client(accountant, 'post', '/assessments/preview').send({ enrollmentId: (await db.enrollment.findFirstOrThrow({ where: { schoolId, studentId } })).id, periods: ['2026-06'] }).expect(201).expect(res => expect(res.body.lines.find((line: { feeHeadCode: string }) => line.feeHeadCode === 'TUITION').amountMinor).toBe('930000'));
+    await client(admin, 'post', '/credits').send({ studentId, amountMinor: '50000', source: 'ADJUSTMENT', reason: 'Later fee adjustment' }).expect(201);
+    await client(accountant, 'get', `/students/${studentId}/ledger`).expect(200).expect(res => { expect(res.body.totals.outstandingMinor).toBe('850000'); expect(res.body.totals.availableCreditMinor).toBe('0'); });
+
+    await client(accountant, 'post', '/assessments/preview').send({ enrollmentId: (await db.enrollment.findFirstOrThrow({ where: { schoolId, studentId } })).id, periods: [] }).expect(400);
+    const annual = await client(admin, 'post', '/fee-heads').send({ code: 'ANNUAL', name: 'Annual Charge', category: 'ANNUAL' }).expect(201);
+    const admission = await client(admin, 'post', '/fee-heads').send({ code: 'ADMISSION_ONE', name: 'Admission Charge', category: 'NEW_ADMISSION' }).expect(201);
+    const oneTimePlan = await client(admin, 'post', '/fee-plans').send({ sessionId, name: `One time plan ${suffix.slice(0, 8)}`, effectiveFrom: '2026-01-01', rules: [{ feeHeadId: annual.body.id, classId, frequency: 'ANNUAL', assessmentMonth: 4, amountMinor: '10000', dueDay: 10 }, { feeHeadId: admission.body.id, classId, frequency: 'ONE_TIME', amountMinor: '15000', dueDay: 10 }] }).expect(201);
+    await client(admin, 'post', `/fee-plans/${oneTimePlan.body.plan.id}/publish`).send({ versionNumber: 1, reason: 'Publish annual and one-time rules' }).expect(201);
+    const assessment = { enrollmentId: (await db.enrollment.findFirstOrThrow({ where: { schoolId, studentId } })).id, feePlanVersionId: oneTimePlan.body.version.id, periods: ['2026-04', '2026-05'] };
+    await client(accountant, 'post', '/assessments/preview').send(assessment).expect(201).expect(res => { expect(res.body.grossMinor).toBe('225000'); expect(res.body.lines).toHaveLength(4); });
+    await client(admin, 'post', '/assessments').send({ ...assessment, reason: 'Assess annual and one-time rules' }).expect(201);
+    await client(accountant, 'post', '/assessments/preview').send({ ...assessment, periods: ['2026-05'] }).expect(201).expect(res => { expect(res.body.grossMinor).toBe('0'); expect(res.body.lines).toHaveLength(1); expect(res.body.lines[0].existingObligationId).toBeDefined(); });
+  });
+
   it('checks stale edits and preserves admission identity, family linkage and document access', async () => {
     const original = (await client(admin, 'get', `/students/${studentId}`).expect(200)).body.student;
     const edit = { version: original.version, name: 'Corrected Student', dateOfBirth: '2014-01-02', gender: 'BOY', address: 'New address', permanentAddress: '', previousSchool: '', reason: 'Verified spelling correction' };
@@ -120,5 +168,29 @@ describe('Levels 1–2 PostgreSQL workflows', () => {
   it('revokes live sessions when an Accountant is deactivated', async () => {
     await client(admin, 'patch', `/users/${accountantId}`).send({ version: 1, active: false, reason: 'Employment ended' }).expect(200);
     await client(accountant, 'get', '/auth/me').expect(401);
+  });
+
+  it('manages transport masters, dated allocations, store stock, and student issues', async () => {
+    const route = await client(admin, 'post', '/transport/routes').send({ name: `Hethnagar – ${suffix.slice(0, 6)}`, campus: 'Hethnagar Campus', destination: 'Barmasia', monthlyAmountMinor: '180000', capacity: 1 }).expect(201);
+    const vehicle = await client(admin, 'post', '/transport/vehicles').send({ name: 'School Bus Test', busNumber: `TEST-${suffix.slice(0, 6)}`, capacity: 1, driver1Name: 'Test Driver', driver1Phone: '9111111111' }).expect(201);
+    const enrollment = await db.enrollment.findFirstOrThrow({ where: { schoolId, studentId } });
+    const allocation = await client(admin, 'post', '/transport/allocations').send({ enrollmentId: enrollment.id, routeId: route.body.id, vehicleId: vehicle.body.id, startDate: '2026-04-01' }).expect(201);
+    await client(admin, 'get', `/transport/report?month=2026-05&routeId=${route.body.id}`).expect(200).expect(res => { expect(res.body).toHaveLength(1); expect(res.body[0].admissionNumber).toBe(admissionNumber); expect(res.body[0].vehicle.busNumber).toBe(vehicle.body.busNumber); });
+    await client(teacher, 'get', '/transport/routes').expect(403);
+    await client(admin, 'post', '/services/assignments').send({ enrollmentId: enrollment.id, type: 'TRANSPORT', label: 'Duplicate route', amountMinor: '100000', frequency: 'MONTHLY', startDate: '2026-04-01' }).expect(400);
+
+    const group = await client(admin, 'post', '/store/groups').send({ code: `BOOK${suffix.slice(0, 4).toUpperCase()}`, name: 'Books', description: 'Student books' }).expect(201);
+    const vendor = await client(admin, 'post', '/store/vendors').send({ name: `Vendor ${suffix.slice(0, 6)}`, phone: '9222222222' }).expect(201);
+    const product = await client(admin, 'post', '/store/products').send({ name: `Test Diary ${suffix.slice(0, 6)}`, description: 'School diary', groupId: group.body.id, unitCostMinor: '12500', alertQuantity: 1 }).expect(201);
+    const cluster = await client(admin, 'post', '/store/clusters').send({ name: `VI starter kit ${suffix.slice(0, 6)}`, items: [{ productId: product.body.id, quantity: 1 }] }).expect(201);
+    await client(admin, 'get', '/store/clusters').expect(200).expect(res => expect(res.body.find((item: { id: string }) => item.id === cluster.body.id).items[0].quantity).toBe(1));
+    await client(admin, 'post', '/store/stock-receipts').send({ vendorId: vendor.body.id, receivedAt: '2026-04-01', reason: 'Opening stock', lines: [{ productId: product.body.id, quantity: 3, unitCostMinor: '12500' }] }).expect(201);
+    const issued = await client(admin, 'post', '/store/issues').send({ studentId, enrollmentId: enrollment.id, issuedAt: '2026-04-02', reason: 'Issue diary', lines: [{ productId: product.body.id, quantity: 2 }] }).expect(201);
+    await client(admin, 'get', '/store/defaulters').expect(200).expect(res => { expect(res.body.items).toHaveLength(1); expect(res.body.items[0].issueNumber).toBe(issued.body.issueNumber); expect(res.body.items[0].outstandingMinor).toBe('25000'); });
+    await client(teacher, 'get', '/store/products').expect(403);
+    expect((await db.storeProduct.findUniqueOrThrow({ where: { id: product.body.id } })).quantity).toBe(1);
+    await client(admin, 'post', `/store/issues/${issued.body.id}/cancel`).send({ reason: 'Returned unused diary' }).expect(201);
+    expect((await db.storeProduct.findUniqueOrThrow({ where: { id: product.body.id } })).quantity).toBe(3);
+    await client(admin, 'post', `/services/assignments/${allocation.body.id}/end`).send({ endDate: '2026-05-31', reason: 'Route test complete' }).expect(201);
   });
 });

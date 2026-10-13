@@ -2,17 +2,32 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ReactNode, useEffect, useState } from 'react';
-import { api, logout, Role, User } from '@/lib/api';
+import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import { api, ApiError, logout, Role, User } from '@/lib/api';
 
 const links = [
   { href: '/dashboard', label: 'Dashboard', icon: '⌂', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER'] },
   { href: '/applications', label: 'Admissions', icon: '↗', roles: ['SUPERADMIN', 'ADMIN'] },
   { href: '/students', label: 'Students', icon: '◉', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER'] },
   { href: '/academic', label: 'Academic setup', icon: '▦', roles: ['SUPERADMIN', 'ADMIN', 'TEACHER'] },
+  { href: '/fees/plans', label: 'Fee plans', icon: '₹', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
+  { href: '/fees/ledger', label: 'Fee ledger', icon: '₿', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
+  { href: '/fees/collect', label: 'Collect payment', icon: '＋', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
+  { href: '/receipts', label: 'Receipts', icon: '▤', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
+  { href: '/cashier', label: 'Cashier shifts', icon: '◒', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
+  { href: '/services', label: 'Transport & hostel', icon: '⌂', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
+  { href: '/transport', label: 'Transport management', icon: '▰', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
+  { href: '/store', label: 'Store management', icon: '▤', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
   { href: '/users', label: 'Users & roles', icon: '♙', roles: ['SUPERADMIN', 'ADMIN'] },
   { href: '/audit', label: 'Audit history', icon: '◌', roles: ['SUPERADMIN', 'ADMIN'] },
 ];
+
+const StaffContext = createContext<User | null>(null);
+export function useStaffUser(): User {
+  const user = useContext(StaffContext);
+  if (!user) throw new Error('Staff workspace must be inside AppShell');
+  return user;
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -20,25 +35,35 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [offline, setOffline] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     setMounted(true);
-    const stored = window.localStorage.getItem('pcdav_user');
-    if (stored) setUser(JSON.parse(stored) as User);
-    api<{ user: User }>('/auth/me').then(result => { setUser(result.user); window.localStorage.setItem('pcdav_user', JSON.stringify(result.user)); if (result.user.mustChangePassword && pathname !== '/change-password') window.location.replace('/change-password'); }).catch(() => setOffline(true));
-  }, []);
-  if (!mounted || !user) return <div className="center-page"><div className="spinner" /><p>Loading secure workspace…</p></div>;
+    let cancelled = false;
+    setOffline(false);
+    api<{ user: User; csrfToken: string }>('/auth/me').then(result => {
+      if (cancelled) return;
+      window.localStorage.setItem('pcdav_user', JSON.stringify(result.user));
+      window.localStorage.setItem('pcdav_csrf', result.csrfToken);
+      if (result.user.mustChangePassword && pathname !== '/change-password') { window.location.replace('/change-password'); return; }
+      setUser(result.user);
+    }).catch((error: ApiError) => { if (!cancelled && error.status !== 401) setOffline(true); });
+    return () => { cancelled = true; };
+  }, [attempt, pathname]);
+  if (!mounted || !user) return <div className="center-page">{offline ? <><p role="alert">Backend unavailable. Your work has not been submitted.</p><button className="button" onClick={() => setAttempt(value => value + 1)}>Retry connection</button></> : <><div className="spinner" /><p>Checking secure session…</p></>}</div>;
+  const protectedLink = links.find(link => pathname === link.href || pathname.startsWith(`${link.href}/`));
+  if (protectedLink && !protectedLink.roles.includes(user.role)) return <div className="center-page"><h1>Access restricted</h1><p>This page is not available for your account.</p><Link href="/dashboard" className="button">Back to dashboard</Link></div>;
   const allowed = links.filter(link => user && link.roles.includes(user.role));
   return <div className="app-layout">
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark">P</div><div><strong>PCDAV ERP</strong><span>School workspace</span></div></div>
       <div className="context-chip"><span className="status-dot" /> P DAV PUBLIC SCHOOL<span className="context-session">2026–27</span></div>
       <nav className="nav-list">{allowed.map(link => <Link className={`nav-link ${pathname === link.href || pathname.startsWith(`${link.href}/`) ? 'active' : ''}`} href={link.href} key={link.href}><span>{link.icon}</span>{link.label}</Link>)}</nav>
-      <div className="sidebar-bottom"><div className="implementation-note"><span>LEVEL 1–2</span><p>Foundation and student lifecycle</p></div><button className="logout-link" onClick={() => void logout()}>↪ Sign out</button></div>
+       <div className="sidebar-bottom"><div className="implementation-note"><span>LEVEL 1–4</span><p>Student lifecycle, fee accounting, payment collection, and store operations</p></div><button className="logout-link" onClick={() => void logout()}>↪ Sign out</button></div>
     </aside>
     <main className="main-area">
       <header className="topbar"><button className="mobile-nav-toggle" aria-label="Open navigation" onClick={() => setMenuOpen(true)}>☰</button><div className="breadcrumbs">P DAV PUBLIC SCHOOL <span>/</span> Staff workspace</div><div className="top-actions">{offline && <span className="offline-badge">API reconnecting</span>}<div className="user-pill"><div className="avatar">{user?.name.charAt(0)}</div><div><strong>{user?.name}</strong><span>{roleLabel(user?.role)}</span></div></div></div></header>
-      {menuOpen && <div className="mobile-menu-backdrop" onClick={() => setMenuOpen(false)}><nav className="mobile-menu" aria-label="Mobile navigation" onClick={event => event.stopPropagation()}><div className="mobile-menu-header"><strong>PCDAV ERP</strong><button aria-label="Close navigation" onClick={() => setMenuOpen(false)}>×</button></div>{allowed.map(link => <Link className={`nav-link ${pathname === link.href || pathname.startsWith(`${link.href}/`) ? 'active' : ''}`} href={link.href} onClick={() => setMenuOpen(false)} key={link.href}><span>{link.icon}</span>{link.label}</Link>)}</nav></div>}
-      <div className="content">{children}</div>
+      {menuOpen && <div className="mobile-menu-backdrop" onClick={() => setMenuOpen(false)}><nav className="mobile-menu" aria-label="Mobile navigation" onClick={event => event.stopPropagation()}><div className="mobile-menu-header"><strong>PCDAV ERP</strong><button aria-label="Close navigation" onClick={() => setMenuOpen(false)}>×</button></div>{allowed.map(link => <Link className={`nav-link ${pathname === link.href || pathname.startsWith(`${link.href}/`) ? 'active' : ''}`} href={link.href} onClick={() => setMenuOpen(false)} key={link.href}><span>{link.icon}</span>{link.label}</Link>)}<button className="logout-link" onClick={() => void logout()}>Sign out</button></nav></div>}
+      <div className="content"><StaffContext.Provider value={user}>{children}</StaffContext.Provider></div>
     </main>
   </div>;
 }

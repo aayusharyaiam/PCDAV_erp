@@ -10,9 +10,15 @@ import { StudentsController } from './students.controller';
 import { AuditController } from './audit.controller';
 import { StudentAccess } from './student-access';
 import { DocumentsController, Storage } from './documents.controller';
+import { FeeHeadsController, FeePlansController, AssessmentsController, CreditsController, StudentLedgerController } from './fees.controller';
+import { ServicesController } from './services.controller';
+import { TransportController } from './transport.controller';
+import { StoreController } from './store.controller';
+import { PaymentsController } from './payments.controller';
+import { PaymentService } from './payment.service';
 
 @Module({
-  controllers: [AuthController, UsersController, AcademicController, AdmissionsController, StudentsController, AuditController, DocumentsController],
-  providers: [Db, StudentAccess, Storage, { provide: APP_GUARD, useClass: AuthGuard }],
+  controllers: [AuthController, UsersController, AcademicController, AdmissionsController, StudentsController, AuditController, DocumentsController, FeeHeadsController, FeePlansController, AssessmentsController, CreditsController, StudentLedgerController, ServicesController, TransportController, StoreController, PaymentsController],
+  providers: [Db, StudentAccess, Storage, PaymentService, { provide: APP_GUARD, useClass: AuthGuard }],
 })
 export class AppModule {}
