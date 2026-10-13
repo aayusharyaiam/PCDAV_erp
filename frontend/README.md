@@ -38,3 +38,13 @@ Open `http://localhost:3000`. The API defaults to `http://localhost:4000/api/v1`
 npm run build
 npm run start
 ```
+
+## Browser tests
+
+```bash
+PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome npm run test:e2e
+```
+
+The tests cover login, the role-aware dashboard, admission-number student search, Student 360, academic setup, and audit navigation. The API must be running and the frontend must be available at `E2E_BASE_URL` (default `http://localhost:3000`). Set `E2E_EMAIL` and `E2E_PASSWORD` for the local Superadmin account. Playwright browser binaries are environment-specific; set `PLAYWRIGHT_CHROMIUM_PATH` when the normal Playwright installer is unavailable.
+
+The mobile check uses a 390×844 viewport and verifies the mobile navigation drawer, registry navigation, core search field, and that the document has no horizontal overflow.

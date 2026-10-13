@@ -17,13 +17,16 @@ const links = [
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [offline, setOffline] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
+    setMounted(true);
     const stored = window.localStorage.getItem('pcdav_user');
     if (stored) setUser(JSON.parse(stored) as User);
     api<{ user: User }>('/auth/me').then(result => { setUser(result.user); window.localStorage.setItem('pcdav_user', JSON.stringify(result.user)); if (result.user.mustChangePassword && pathname !== '/change-password') window.location.replace('/change-password'); }).catch(() => setOffline(true));
   }, []);
-  if (!user && typeof window !== 'undefined') return <div className="center-page"><div className="spinner" /><p>Loading secure workspace…</p></div>;
+  if (!mounted || !user) return <div className="center-page"><div className="spinner" /><p>Loading secure workspace…</p></div>;
   const allowed = links.filter(link => user && link.roles.includes(user.role));
   return <div className="app-layout">
     <aside className="sidebar">
@@ -33,7 +36,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="sidebar-bottom"><div className="implementation-note"><span>LEVEL 1–2</span><p>Foundation and student lifecycle</p></div><button className="logout-link" onClick={() => void logout()}>↪ Sign out</button></div>
     </aside>
     <main className="main-area">
-      <header className="topbar"><div className="breadcrumbs">P DAV PUBLIC SCHOOL <span>/</span> Staff workspace</div><div className="top-actions">{offline && <span className="offline-badge">API reconnecting</span>}<div className="user-pill"><div className="avatar">{user?.name.charAt(0)}</div><div><strong>{user?.name}</strong><span>{roleLabel(user?.role)}</span></div></div></div></header>
+      <header className="topbar"><button className="mobile-nav-toggle" aria-label="Open navigation" onClick={() => setMenuOpen(true)}>☰</button><div className="breadcrumbs">P DAV PUBLIC SCHOOL <span>/</span> Staff workspace</div><div className="top-actions">{offline && <span className="offline-badge">API reconnecting</span>}<div className="user-pill"><div className="avatar">{user?.name.charAt(0)}</div><div><strong>{user?.name}</strong><span>{roleLabel(user?.role)}</span></div></div></div></header>
+      {menuOpen && <div className="mobile-menu-backdrop" onClick={() => setMenuOpen(false)}><nav className="mobile-menu" aria-label="Mobile navigation" onClick={event => event.stopPropagation()}><div className="mobile-menu-header"><strong>PCDAV ERP</strong><button aria-label="Close navigation" onClick={() => setMenuOpen(false)}>×</button></div>{allowed.map(link => <Link className={`nav-link ${pathname === link.href || pathname.startsWith(`${link.href}/`) ? 'active' : ''}`} href={link.href} onClick={() => setMenuOpen(false)} key={link.href}><span>{link.icon}</span>{link.label}</Link>)}</nav></div>}
       <div className="content">{children}</div>
     </main>
   </div>;

@@ -1,6 +1,6 @@
 # PCDAV ERP implementation progress
 
-**Last updated:** 12 October 2026  
+**Last updated:** 13 October 2026
 **Current branch:** `master`  
 **Current milestone:** Levels 1–2 implementation
 
@@ -23,6 +23,8 @@
 - Level 2 backend: admission applications, duplicate suggestions, staged decisions, capacity validation, atomic admission-number allocation, retry-safe enrollment, family/guardian/sibling records, enrollment history, Student 360, Teacher classroom scope, and document metadata/uploads.
 - Level 1–2 frontend committed in `e904109`: login/password-change, role-aware dashboard shell, users, academic setup, applications, review/enrollment, student registry, Student 360, audit history, responsive UI, and API reconnect state.
 - PostgreSQL integration suite covers six Level 1–2 workflow/security scenarios.
+- Word report repaired and regenerated as a standard 22-part DOCX package; ZIP integrity, all XML parts, relationships, required content, and report phrases validate successfully.
+- Reproducible Word generation is retained in `tools/`; Microsoft Word COM opened the repaired report successfully and read 32,232 text characters.
 
 ## Verified
 
@@ -31,6 +33,8 @@
 - Prisma schema validation, migration deployment, and seed pass against temporary local PostgreSQL 18.
 - `npm test` passes: 6 tests, including role boundaries, CSRF, idempotent enrollment retry, unique admission numbers, capacity, Teacher scope, stale edits, documents, and session revocation.
 - `/health` responds with `{ "status": "ok" }` when API and database are ready.
+- Frontend and backend production builds pass after the document repair.
+- Playwright browser checks pass: desktop login/dashboard, student registry/Student 360, admissions/academic/audit navigation, and 390×844 mobile navigation/no-overflow.
 
 ## Current implementation contract
 
@@ -92,6 +96,12 @@ npm run dev
 ```
 
 The first local sign-in must use the email configured by `SEED_SUPERADMIN_EMAIL` and the password supplied to `SEED_SUPERADMIN_PASSWORD`. The seed never overwrites an existing password. Do not commit `.env` files, local uploads, or database data.
+
+The integration test command requires the same database variable:
+
+```bash
+DATABASE_URL='postgresql://pcdav:pcdav_local@localhost:5433/pcdav?schema=public' npm test -- --runInBand
+```
 
 ## Verification record
 

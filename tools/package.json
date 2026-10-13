@@ -1,0 +1,7 @@
+{
+  "name": "pcdav-erp-document-tools",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "build-school-report": "node build-school-report.cjs" },
+  "dependencies": { "docx": "9.10.0" }
+}
