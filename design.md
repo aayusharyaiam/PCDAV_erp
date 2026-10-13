@@ -1,9 +1,21 @@
 # Design specification — improved school ERP
 
-**Version:** 0.2, revised 12 October 2026  
-**Status:** proposed UX/UI specification, not a finished visual prototype  
+**Version:** 0.4, revised 13 October 2026
+
+**Status:** target UX/UI specification with implemented staging routes and explicit remaining gaps
 **Requirements:** [prd.md](prd.md)  
 **Existing-system evidence:** [feature-audit.md](feature-audit.md)
+
+## Current staging screens versus target design
+
+The staff app now includes `/applications`, `/students`, `/academic`, `/users`, `/audit`, `/fees/plans`, `/fees/ledger`, `/services`, `/transport`, `/store`, `/fees/collect`, `/receipts` and `/cashier`. Screen specifications below describe the complete target experience, not all current UI capabilities.
+
+- Collection uses admission-number search, server quote/review, automatic oldest-due fee/store allocation, partial/advance credit, cash change, verified manual electronic capture and pending cheque capture. Individual obligation selection is not yet available.
+- Payment and partial-refund retries preserve the original payload/key after uncertain responses, including reload. A rejected retry does not disprove an earlier commit. Corrupt payment recovery storage blocks a fresh collection until its outcome is resolved.
+- `/receipts` combines issued snapshots, pending cheque actions, direct Admin corrections and reasoned browser reprints. The Accountant approval-request screen remains pending. PDF download is explicitly unavailable, not a running background job.
+- `/cashier` provides shift opening, server expected cash, counted cash and variance close. Deposits, handovers and full reconciliation panels remain pending.
+- Role-aware navigation and API authorization are implemented; the shell's school/session display is still a staging label, not a dynamic historical context selector. Rich dashboard metrics, Student 360 financial tabs, attendance, promotion, leaving and certificate screens remain target work.
+- Verification: 23 mocked browser contract tests plus one live synthetic collection/store/receipt/close flow pass. Existing Level 1–3 mobile checks are earlier evidence; physical print, full accessibility and school usability approval remain open. See [PROGRESS.md](PROGRESS.md).
 
 ## 1. Design direction
 
@@ -123,21 +135,21 @@ Verify contrast in the implemented components; color must never be the only stat
 
 ## 5. Screen inventory and traceability
 
-| Screen ID | Screen / route proposal | Primary requirements |
+| Screen ID | Screen / route (target unless noted) | Primary requirements |
 |---|---|---|
 | S01 | Home `/dashboard` | REP-01, REP-03 |
-| S02 | Applications `/admissions` | ADM-01 |
-| S03 | Registration wizard `/admissions/new` | ADM-02 |
-| S04 | Admission review `/admissions/:id` | ADM-03, ADM-04 |
+| S02 | Applications `/applications` (staging) | ADM-01 |
+| S03 | Registration form within `/applications` (staging); full wizard target | ADM-02 |
+| S04 | Admission review `/applications/:id` (staging) | ADM-03, ADM-04 |
 | S05 | Student directory `/students` | STU-01, STU-02 |
 | S06 | Student 360 `/students/:id` | STU-01, STU-03 |
 | S07 | Fee collection `/fees/collect` | PAY-01–PAY-04 |
 | S08 | Receipt detail/register `/receipts` | PAY-05, PAY-06 |
-| S09 | Dues and ledger `/fees/outstanding` | FEE-04, REP-01 |
-| S10 | Fee-plan builder `/settings/fee-plans` | FEE-01, FEE-02 |
+| S09 | Student fee ledger `/fees/ledger` (staging); richer dues target | FEE-04, REP-01 |
+| S10 | Fee-plan builder `/fees/plans` (staging) | FEE-01, FEE-02 |
 | S11 | Concessions/fines `/fees/adjustments` | FEE-03, FEE-05 |
-| S12 | Pending payments `/payments/pending` | PAY-03, PAY-06 |
-| S13 | Day close `/cashier/close` | REP-02 |
+| S12 | Pending cheques within `/receipts` (staging) | PAY-03, PAY-06 |
+| S13 | Cashier shifts `/cashier` (staging); full day-close target | REP-02 |
 | S14 | Promotion wizard `/lifecycle/promotions` | LFC-01 |
 | S15 | Withdrawal wizard `/lifecycle/withdrawals` | LFC-02, LFC-03 |
 | S16 | Documents `/documents` | DOC-01, DOC-02 |
@@ -148,6 +160,8 @@ Verify contrast in the implemented components; color must never be the only stat
 | S21 | Teacher attendance `/attendance` | ATT-01–ATT-03 |
 | S22 | Promotion decisions `/attendance/promotion-decisions` | ATT-04, LFC-01 |
 | S23 | Special-access requests `/access-requests` | FND-05, PAY-06 |
+| S24 | Transport management `/transport` | SRV-01, SRV-02 |
+| S25 | Store management `/store` | Inventory/issues and shared payment settlement in staging; full financial release follows PAY-01–PAY-06 |
 
 ## 6. Core screen specifications
 
@@ -255,7 +269,7 @@ All data in this wireframe is synthetic. The totals intentionally distinguish as
 - “Review payment” shows final amount, mode, allocation, remaining due/credit and depositor. Confirmation button reads `Record ₹1,600 payment`.
 - After submission, display `Recording…`. On timeout, display `Checking payment status…`; query the original command before offering a retry.
 - Success displays receipt number and Print/Download; next student is a separate clear action.
-- No local success message without a committed server result. PDF unavailable shows `Payment recorded · PDF preparing` with recovery, not “Payment failed”.
+- No local success message without a committed server result. A queued render should show `Payment recorded · PDF preparing`; the current unconfigured renderer must instead show PDF unavailable. Neither state means the payment failed.
 
 ### S08 — receipt register/detail
 

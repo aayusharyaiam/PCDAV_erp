@@ -1,8 +1,24 @@
 # Product Requirements Document — improved school ERP
 
-**Version:** 0.2, revised 12 October 2026 (legacy audit: 4 October 2026)  
-**Status:** confirmed role/scope decisions incorporated; fee rates, migration, and deployment sizing still require inputs  
+**Version:** 0.4, revised 13 October 2026 (legacy audit: 4 October 2026)
+
+**Status:** target product contract with a verified staging subset; financial release, school UAT and production policies remain open
 **Evidence:** [feature-audit.md](feature-audit.md), [reference-data.md](reference-data.md)
+
+## Current delivery coverage
+
+This PRD describes the required release, not a claim that every requirement is complete. [PROGRESS.md](PROGRESS.md) is the current verification/handoff record.
+
+| Requirement area | Implemented staging behavior | Remaining release criteria |
+|---|---|---|
+| Foundation/admissions/students | Four-role access, enrollment, unique admission numbers, history, academic setup, documents and audit | Full approval inbox/notifications, operational UAT and later lifecycle actions |
+| FEE-01–FEE-05 / SRV | Versioned heads/plans, periodic assessment, balances/credit, dated hostel/transport, transport masters and store inventory/issues | Complete concession/fine policies, production rate approval and live import |
+| PAY-01–PAY-04 | Server quote, automatic oldest-due fee/store allocation, partial/advance payment, cash change, verified manual electronic capture, cheque pending/clear/bounce, retry/concurrency protection | Selectable obligations/periods, approved old-session rules and bounce charges, complete credit lineage/recovery |
+| PAY-05–PAY-06 | Immutable numbered receipt snapshots, browser reprint audit, direct Admin corrections and idempotent partial refunds | Accountant request/Admin approval, PDF worker/download, configurable approved receipt series and bank/refund settlement matching |
+| REP-01–REP-02 | Receipt register, fee ledger, collection totals API, opening float/cash corrections/count/variance close | Full filtered reports/drill-down, deposits/handovers and other authorized cash movements, balanced journal |
+| Attendance/lifecycle/migration | Role and enrollment foundations available | Teacher attendance/corrections/Promote-Retain, withdrawal/certificates, promotion batches, migration and go-live controls |
+
+Evidence on 13 October 2026: 26 backend integration tests and 24 Level 4 browser tests passed (23 mocked contracts + one live synthetic flow), alongside builds/typechecks/migrations. These do not constitute school approval, complete financial acceptance, PDF/printer validation or production readiness. Requirement IDs and acceptance criteria below remain the target; staging defaults do not replace unresolved decisions D06/D07/D12.
 
 ## 1. Product objective
 
@@ -42,6 +58,8 @@ Account lifecycle rules:
 **P1 — immediate extensions:** reminders, parent self-service and gateway payments, richer import/export, full transport operations, document request routing, management analytics. Bring any item forward if the school confirms it is essential to daily operation.
 
 **P2 — expanded ERP:** store inventory, full finance vouchers/accounting export beyond the Admin-controlled core financial oversight, examinations, employee operations, front office, timetable, communication, and learning/app modules after their discovery is complete. Attendance is P0 for day-wise teacher marking; exam attendance and advanced examination workflows remain later scope.
+
+**Current staging note:** Management requested transport and store visibility during the prototype. A bounded transport/store operational slice is available early for route, inventory, student-issue, and continuity review, and open store issues now settle through the shared Level 4 staging collection flow. This does not approve store payment collection or full finance for production; the remaining payment/accounting controls and school decisions still apply.
 
 **Continuity rule:** a used legacy module cannot simply disappear. For a deferred module, explicitly retain an agreed operational process, reconcile its financial balances, and specify the integration/manual handoff. Store, transport, and hostel dues required for clearance must remain visible even if their full operational modules are deferred. Hostel fee assessment and dated hostel assignments remain in the replacement scope.
 

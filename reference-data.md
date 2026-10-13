@@ -4,6 +4,8 @@
 **Source:** evidence IDs in [feature-audit.md](feature-audit.md).  
 These values document the existing screen configuration. They are not automatically approved rates/policies for the replacement. No student-level record data is included. The replacement decisions below are product-owner decisions; they do not claim that the legacy portal already behaved this way.
 
+**Implementation cross-reference updated:** 13 October 2026. The replacement now supports versioned fee assessment and a Level 4 staging payment/receipt flow, documented in [PROGRESS.md](PROGRESS.md) and [backend/README.md](backend/README.md). The seed creates named fee heads, not an approved fee matrix. Do not import the observed rates, ₹500 bounce charge, previous-session block or receipt format as approved production rules. Current staging uses automatic oldest-due fee/store allocation, same-student fee credit and a provisional receipt series; school sign-off remains required. The snapshot values below are unchanged historical reference data.
+
 ## 1. Academic structure
 
 | Session | Dates | Visible state |

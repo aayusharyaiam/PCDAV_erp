@@ -1,9 +1,22 @@
 # Technical Requirements Document — school ERP
 
-**Version:** 0.2, revised 12 October 2026 (legacy audit: 4 October 2026)  
-**Status:** recommended implementation architecture; no application has been built yet  
+**Version:** 0.4, revised 13 October 2026 (legacy audit: 4 October 2026)
+
+**Status:** target technical contract; Levels 1–3 and a Level 4 staging slice are implemented, not production-complete
 **Product contract:** [prd.md](prd.md)  
 **Legacy evidence:** [feature-audit.md](feature-audit.md)
+
+## Current implementation boundary
+
+- Actual folders are `backend/` (NestJS/Prisma/PostgreSQL), `frontend/` (Next.js/React/TypeScript and custom CSS), and `tools/` (management DOCX generation/validation). The larger topology below is the target, not a request to move the existing applications or install additional UI packages.
+- The API implements identity, admissions/enrollment, academic setup, private student documents, versioned fee assessment, services, transport and store operations. The frontend calls same-origin `/api/v1`, proxied to `API_INTERNAL_URL`; `/health` checks API/database readiness.
+- Level 4 uses `PaymentQuote`, `Payment`, allocation/application/release records, `Receipt`/events/sequence, `PaymentRefund`, `RefundCommand` and `CashierShift`. BigInt paise values serialize as strings. Serializable transactions, bounded retries, unique command/quote/receipt constraints and balance checks protect posting. A database trigger prevents receipt-snapshot rewrites.
+- Payment capture is idempotent by school/cashier/key and request hash; retry returns the existing payment and receipt with current status. Partial refunds store their original response by school/actor/key. Manual electronic capture requires explicit staff verification/evidence; a school/channel/trimmed-reference unique index prevents reuse. This is not bank verification or gateway integration.
+- Pending cheques reserve no balance and issue no final receipt. Clearance recalculates allocation from current balances. Corrections are Admin/Superadmin-only, retain original history and require an open payout shift for cash; the request/approval inbox is not implemented.
+- Receipts are immutable JSON snapshots with browser reprint history. PDF status is `UNAVAILABLE`; no renderer/outbox/worker is running. The provisional school-wide counter displays `PREFIX/FEE/YYYY/NNNNNN`, not an approved configurable financial-year series.
+- Remaining target controls include balanced journal, complete assessment-consumed payment-credit lineage/reversal, financial-history constraints across all entities, cash movements/handovers, full reports, approval requests, production policy configuration, PDF generation, migration and operational release gates. Spent credit reversal is rejected rather than silently erasing settled fees.
+
+Eight migrations exist, including three Level 4 migrations. Deploy reviewed migrations with `npm --prefix backend run db:migrate`, not `db push`. Existing duplicate electronic references must be reconciled before the command-safety index can deploy; old records are not retroactively marked verified. See [backend/README.md](backend/README.md) for the implemented API and [PROGRESS.md](PROGRESS.md) for 26 backend / 24 browser checks and remaining gaps.
 
 ## 1. Architecture decision
 
@@ -25,7 +38,7 @@ Build a **modular monolith** with one authoritative relational database, explici
 | Tests | Unit/integration tests, real PostgreSQL test database, Playwright E2E | Calculation, concurrency, authorization and user workflow coverage |
 | Deployment | Render frontend/API/worker services, managed TLS, paid PostgreSQL for production, private S3-compatible storage | Repeatable staging/production; health checks and uptime alerts; no reliance on ephemeral local files |
 
-Pin supported versions during project bootstrap. This is a proposed stack for the empty workspace, not a claim about the legacy backend. The legacy source exposed PHP-style paths and JavaScript libraries, but its full server architecture was not inspected.
+The applications have package lockfiles and the existing stack must be preserved. Items such as the worker, queue and server PDF renderer remain target components, not installed application capabilities. The legacy source exposed PHP-style paths and JavaScript libraries, but its full server architecture was not inspected.
 
 ### Logical topology
 
@@ -65,7 +78,9 @@ The API must expose an unauthenticated, non-sensitive `GET /health` endpoint ret
 
 Configure an external uptime monitor to request `/health` at a reasonable interval and notify the technical owner when the endpoint is unavailable, returns an unhealthy status, or exceeds the agreed response-time threshold. Uptime requests may reduce idle periods on a Free Render web service, but they do not remove cold starts, guarantee availability, replace a paid production instance, or replace backups. The monitor must not be used as the financial transaction safety mechanism.
 
-## 2. Proposed repository structure
+## 2. Target repository structure (not the current layout)
+
+The implemented project uses `backend/`, `frontend/`, and `tools/`; use those folders for all current commands. The original layout proposal below is retained as design context only. No repository migration is required for the next Level 4 task.
 
 ```text
 apps/
@@ -117,6 +132,10 @@ All business entities include an opaque internal ID; school-scoped entities incl
 | FeeRule | Head, amount/rate, recurrence, assessment dates, eligibility, proration policy, rule version |
 | ServiceAssignment | Enrollment, transport/hostel/service, route/price version, start/end, status |
 | Route / Vehicle / ServicePrice | Operational masters, capacity and dated prices |
+| StoreGroup / StoreCluster / StoreVendor | Store classification, reusable issue bundles, and supplier records |
+| StoreProduct | Product description, group, unit cost, alert quantity, and current stock |
+| StoreStockReceipt / StoreStockMovement | Stock received, stock issued/returned/adjusted, actor, reason, and source history |
+| StoreIssue / StoreIssueLine | Student enrollment, issued products, quantities, open balance, cancellation history |
 | Obligation | Student/enrollment, session, head, service period, due date, assessed amount, source/rule |
 | Adjustment / ConcessionAssignment | Debit/credit adjustment or rule assignment, head/period, amount, reason, approval |
 | Payment | Student/payer, received amount, currency, mode/submode, business date, status, bank reference |
@@ -251,6 +270,8 @@ This journal is a proposed operational accounting design, subject to accountant 
 
 ### Collection contract
 
+The following is the full target contract. Current staging quotes accept `{ studentId, amountMinor }` and allocate automatically across eligible fee/store dues. Steps involving selected periods, journal and outbox remain incomplete; the implemented receipt snapshot is independent of browser printing, but there is no PDF job yet. Recovery currently replays the frozen POST with the same key rather than querying a separate command-status endpoint.
+
 1. UI requests a server-calculated quote for selected obligations/periods and proposed received amount.
 2. Quote includes source versions, allocation order, itemized totals, balance/credit effects and expiry. It does not post money.
 3. UI sends the quote ID/version, payment details and an `Idempotency-Key` to the payment command.
@@ -282,7 +303,7 @@ This journal is a proposed operational accounting design, subject to accountant 
 
 ### Receipt numbering
 
-Define an approved scope, for example `school / fee-series / financial-year`. The display pattern is configurable; a sample `PDAV/FEE/26-27/000001` is a proposal, not an observed legacy format.
+Define an approved scope, for example `school / fee-series / financial-year`. The target display pattern must be configurable; a sample `PDAV/FEE/26-27/000001` is a proposal, not an observed legacy format. The current provisional counter is described in the implementation boundary above and is not production approval of this numbering policy.
 
 Allocate using a locked counter inside the financial transaction. Committed issued numbers are never reused; cancelled entries remain visible. Imported legacy numbers have a separate source/series namespace so historical collisions cannot overwrite new receipts.
 
@@ -297,6 +318,8 @@ Reprinting reads the original snapshot and records a print event if enabled; it 
 Draft fields → review/approval → immutable numbered issue. Store source enrollment, verified overrides/reasons, approver, issue date, effective withdrawal event where applicable, template version and document hash. Cancellation/superseding creates linked history. A preview never consumes a final certificate number.
 
 ## 9. API outline
+
+This table retains the broader target API, including unimplemented lifecycle/approval/report resources. Actual routes and DTOs are documented in `backend/README.md`; in particular use `POST /assessments`, `/services/assignments`, and `GET /payments?status=PENDING_CHEQUE`. `GET /receipts/:id/pdf` currently returns availability metadata, not a PDF.
 
 Prefix `/api/v1`; authenticated requests include explicit school context validated against membership. Session filters never silently change a global school setting. All list endpoints use server pagination, sort allowlists and bounded filters.
 
@@ -329,11 +352,12 @@ Prefix `/api/v1`; authenticated requests include explicit school context validat
 | `POST /imports`, `POST /imports/:id/validate`, `POST /imports/:id/execute` | Audited migration pipeline |
 | `GET /audit-events` | Permission-filtered activity |
 
-### Example payment command
+### Implemented staging cash payment command
+
+First open a shift and request `POST /payment-quotes` with `{ "studentId": "synthetic-student-uuid", "amountMinor": "171000" }`. Use the returned `id` and `version` below with an `Idempotency-Key` header. Never generate a fresh key to resolve an uncertain response.
 
 ```json
 {
-  "studentId": "synthetic-student-uuid",
   "quoteId": "synthetic-quote-uuid",
   "quoteVersion": 3,
   "receivedAmountMinor": "171000",
@@ -341,11 +365,11 @@ Prefix `/api/v1`; authenticated requests include explicit school context validat
   "businessDate": "2026-10-04",
   "mode": "CASH",
   "tenderedAmountMinor": "200000",
-  "payer": { "name": "Sample Guardian", "phone": "<test-number>" }
+  "payerName": "Sample Guardian"
 }
 ```
 
-Response includes committed payment ID, receipt ID/number, allocation summary, remaining due/credit, and PDF status. Standard error envelope includes machine code, user message, field errors, request ID, and conflict details; no stack trace or personal data leak.
+The staging response includes `payment`, `allocations`, credit applications/releases, refunds/events, `receipt` and `pdfStatus`. The receipt snapshot retains original allocation and balance totals; a pending cheque has no receipt. Validation/error responses include a message and request ID; the richer target machine-code/conflict envelope still needs standardization. No payment submission creates a server PDF in the current build.
 
 ## 10. Permissions and information handling
 

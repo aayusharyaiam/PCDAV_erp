@@ -5,6 +5,8 @@
 **Visible academic session:** 2026–2027  
 **Purpose:** establish a traceable baseline for an improved school ERP.
 
+**Implementation cross-reference updated:** 13 October 2026. This remains a historical, read-only audit of the legacy ERP, not a current application feature checklist. The replacement now has Levels 1–3, transport/store operations and a tested Level 4 staging payment slice; see [PROGRESS.md](PROGRESS.md) for current evidence and gaps. No legacy payment/refund action was performed to obtain that implementation evidence. The new code's synthetic tests do not turn the legacy findings marked I/M/U into verified legacy behavior, and do not authorize production collection.
+
 ## 1. How to interpret this audit
 
 | Mark | Meaning |

@@ -1,7 +1,13 @@
 # Implementation procedure and roadmap
 
-**Version:** 0.2, revised 12 October 2026 (legacy audit: 4 October 2026)  
-**Goal:** replace the core student/fee workflow safely and efficiently, including hostel fees, teacher attendance, teacher classroom promotion decisions, and the confirmed account hierarchy, then expand the ERP in controlled phases.
+**Version:** 0.4, revised 13 October 2026 (legacy audit: 4 October 2026)
+**Goal:** replace the core student/fee workflow safely and efficiently, including hostel fees, transport operations, store operations, teacher attendance, teacher classroom promotion decisions, and the confirmed account hierarchy, then expand the ERP in controlled phases.
+
+## Current delivery position
+
+Levels 1–3, the first operational transport/store slices, and the Level 4 staging collection-to-receipt/basic-close slice are implemented. Management can review payment quotes, partial balances/credit, store settlement, cash/verified manual electronic/cheque flows, receipt snapshots, Admin corrections, and cashier close. Level 4 is not production-complete: approval requests, PDFs, balanced journal/credit lineage, cash movements, full reconciliation and school policy sign-off remain. Live migration, attendance release, promotion, and withdrawal are still approval-gated. `PROGRESS.md` records current tests and the next bounded task.
+
+Level 4 corresponds to the collection-to-receipt work in Phase 3 below; level numbers and phase numbers are not interchangeable. The existing 26 backend and 24 Level 4 browser tests are staging evidence, not a completed Phase 3 exit or school UAT. Phase windows and the first-week checklist are the original sequencing guidance, not a current forecast or a list of work to redo.
 
 ## 1. Recommended sequence
 
@@ -11,7 +17,7 @@ Confirm school rules + obtain export samples
   → foundation + identity + enrollment model
   → fee assessment engine
   → payment / receipt / reconciliation vertical slice
-  → admissions + services + reports
+   → admissions + services + transport/store operations + reports
   → teacher attendance + promotion decisions
   → withdrawal / certificates + promotion batch
   → migration rehearsal + staff UAT
@@ -100,7 +106,7 @@ Read-only production navigation can illustrate screens; any creation, payment, p
 
 - Implement permanent student/family identity and session-specific enrollment/history.
 - Implement profile search/edit with duplicates and concurrency handling.
-- Build Admin-managed fee plans, versioning, period assessment, concessions/fines, dated transport/hostel service-fee rules, and student credit/outstanding calculations.
+- Build Admin-managed fee plans, versioning, period assessment, concessions/fines, dated transport/hostel service-fee rules, transport masters/allocation, initial store inventory/issue operations, and student credit/outstanding calculations.
 - Build financial journal, allocation primitives and calculation previews before full payment UI.
 - Implement vendor-data staging, mapping and first dry-run validation in parallel.
 
@@ -123,7 +129,7 @@ Read-only production navigation can illustrate screens; any creation, payment, p
 **Indicative timing:** weeks 10–13.
 
 - Complete admissions/follow-ups, document checklist, confirmation and first assessment.
-- Finish transport/hostel fee assignments, dues/collection/enrollment reports and historical views.
+- Finish transport/hostel fee assignments, transport operational reports, store issue/stock reports, dues/collection/enrollment reports, and historical views.
 - Implement Teacher day-wise attendance for assigned classrooms and Admin-approved correction requests.
 - Implement final Teacher Promote/Retain decisions and Admin-reviewed promotion exceptions.
 - Implement withdrawal/strike-off/readmission, clearance and certificate issuance.
@@ -199,7 +205,7 @@ P1/P2 features are estimated separately after discovery. Do not promise a comple
 - Present the fee-rule calculation contract and sample results.
 - Review source-data issues, prototype feedback, next sprint backlog and blocking decisions.
 
-These are future implementation actions. This documentation task created specifications only.
+The foundation and demonstration work in this original checklist has since been implemented in staging. Use the current delivery position and section 10 to choose remaining work; do not recreate the workspace or repeat completed foundation tasks.
 
 ## 7. Suggested backlog order
 
@@ -255,9 +261,9 @@ These are future implementation actions. This documentation task created specifi
 
 ## 10. What to do next
 
-1. **Schedule the school working session and resolve D01–D07 first.** Include a Teacher in the session to validate classroom attendance and promotion decisions; bring the current fee matrix and receipt ambiguities from these documents.
+1. **Confirm outstanding school decisions, especially D06/D07/D12.** Review allocation/store settlement, receipt series, correction authority, cashier dates/shifts and bank/refund evidence. Include a Teacher for the still-pending attendance and promotion workflows.
 2. **Obtain a vendor export sample and redacted print samples immediately.** This establishes whether the financial history can be migrated faithfully.
-3. **Approve the Accountant/Teacher prototype and fee calculations.** Validate admission-number search, fee balances/credit, attendance, promotion decisions, and receipt safety together.
-4. **Start implementation with foundation, enrollment history and the fee/payment vertical slice.** Add broader modules after the office can reliably operate the core lifecycle.
+3. **Demonstrate the existing Accountant staging flow and fee calculations.** Validate admission-number search, partial payment, store settlement, credit, frozen retries, receipt history and cash close with synthetic data. Attendance and promotion are designs to validate, not delivered screens.
+4. **Finish Level 4 controls before expanding.** Start with Accountant correction request → Admin approve/reject, bound to one action/record/version and applied once. Then complete journal/credit lineage, cash movements, PDF worker, reports and signed policy configuration. Add broader modules only after financial acceptance.
 
-The immediate deliverable after this document pack should be a school-approved decision log, a clickable core prototype, and a sprint backlog linked to the PRD requirement IDs.
+The immediate deliverables are a school-approved financial decision log, an approved review of the current synthetic prototype, and completion of the remaining Level 4 acceptance criteria. The unchecked go-live gates above remain release requirements even where narrow automated staging tests already pass.
