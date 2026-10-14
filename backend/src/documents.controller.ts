@@ -13,19 +13,23 @@ import { DocumentDto } from './dto';
 export class Storage {
   private s3 = process.env.STORAGE_DRIVER === 's3' ? new S3Client({ region: process.env.S3_REGION || 'auto', endpoint: process.env.S3_ENDPOINT }) : null;
   private folder = resolve(process.env.UPLOAD_DIR || './uploads');
+  readonly available = !!this.s3 || process.env.NODE_ENV !== 'production';
   constructor() {
-    if (process.env.NODE_ENV === 'production' && !this.s3) throw new Error('Production requires private S3 document storage');
+    if (process.env.NODE_ENV === 'production' && !this.s3 && process.env.APP_MODE !== 'demo') throw new Error('Production requires private S3 document storage');
     if (this.s3 && !process.env.S3_BUCKET) throw new Error('S3_BUCKET is required');
   }
   async put(key: string, buffer: Buffer, mime: string) {
+    if (!this.available) throw new BadRequestException('Document storage is disabled in demo mode');
     if (this.s3) await this.s3.send(new PutObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key, Body: buffer, ContentType: mime }));
     else { await mkdir(this.folder, { recursive: true }); await writeFile(resolve(this.folder, key), buffer, { flag: 'wx' }); }
   }
   async get(key: string) {
+    if (!this.available) throw new NotFoundException('Document storage is disabled in demo mode');
     if (this.s3) { const result = await this.s3.send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key })); return Buffer.from(await result.Body!.transformToByteArray()); }
     return readFile(resolve(this.folder, key));
   }
   async remove(key: string) {
+    if (!this.available) return;
     if (this.s3) await this.s3.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key }));
     else await unlink(resolve(this.folder, key));
   }
@@ -41,6 +45,7 @@ export class DocumentsController {
   }
   @Post() @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
   async upload(@CurrentUser() actor: Actor, @Body() body: DocumentDto, @UploadedFile() file?: Express.Multer.File) {
+    if (!this.storage.available) throw new BadRequestException('Document uploads are disabled in demo mode until private object storage is configured');
     if (!file || (!!body.studentId === !!body.applicationId)) throw new BadRequestException('Upload one file for one student or application');
     const signature = file.buffer;
     const mime = signature.subarray(0, 5).toString() === '%PDF-' ? 'application/pdf' : signature.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) ? 'image/png' : signature[0] === 255 && signature[1] === 216 && signature[2] === 255 ? 'image/jpeg' : '';

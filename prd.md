@@ -1,8 +1,8 @@
 # Product Requirements Document — improved school ERP
 
-**Version:** 0.4, revised 13 October 2026 (legacy audit: 4 October 2026)
+**Version:** 0.5, revised 14 October 2026 (legacy audit: 4 October 2026)
 
-**Status:** target product contract with a verified staging subset; financial release, school UAT and production policies remain open
+**Status:** target product contract with a verified synthetic Level 4 demo subset; financial release, school UAT and production policies remain open
 **Evidence:** [feature-audit.md](feature-audit.md), [reference-data.md](reference-data.md)
 
 ## Current delivery coverage
@@ -13,12 +13,12 @@ This PRD describes the required release, not a claim that every requirement is c
 |---|---|---|
 | Foundation/admissions/students | Four-role access, enrollment, unique admission numbers, history, academic setup, documents and audit | Full approval inbox/notifications, operational UAT and later lifecycle actions |
 | FEE-01–FEE-05 / SRV | Versioned heads/plans, periodic assessment, balances/credit, dated hostel/transport, transport masters and store inventory/issues | Complete concession/fine policies, production rate approval and live import |
-| PAY-01–PAY-04 | Server quote, automatic oldest-due fee/store allocation, partial/advance payment, cash change, verified manual electronic capture, cheque pending/clear/bounce, retry/concurrency protection | Selectable obligations/periods, approved old-session rules and bounce charges, complete credit lineage/recovery |
-| PAY-05–PAY-06 | Immutable numbered receipt snapshots, browser reprint audit, direct Admin corrections and idempotent partial refunds | Accountant request/Admin approval, PDF worker/download, configurable approved receipt series and bank/refund settlement matching |
-| REP-01–REP-02 | Receipt register, fee ledger, collection totals API, opening float/cash corrections/count/variance close | Full filtered reports/drill-down, deposits/handovers and other authorized cash movements, balanced journal |
+| PAY-01–PAY-04 | Server quote, automatic or selected fee/store allocation, partial/advance payment, cash change, verified manual electronic capture, cheque pending/clear/bounce, retry/concurrency protection and configurable demo policy | Approved old-session/rate rules, external bank/refund settlement and production policy sign-off |
+| PAY-05–PAY-06 | Immutable numbered receipt snapshots, browser reprint audit, Accountant request/Admin decision, idempotent corrections/refunds, current-status PDF jobs and download/retry/status | Approved receipt series/font/printer, object-storage worker and bank/refund settlement matching |
+| REP-01–REP-02 | Receipt register, student statements, fee/store dues, collection/journal reports, opening float, cash movements, counted cash and variance close | School-approved report definitions, backups/recovery and full statutory/management acceptance |
 | Attendance/lifecycle/migration | Role and enrollment foundations available | Teacher attendance/corrections/Promote-Retain, withdrawal/certificates, promotion batches, migration and go-live controls |
 
-Evidence on 13 October 2026: 26 backend integration tests and 24 Level 4 browser tests passed (23 mocked contracts + one live synthetic flow), alongside builds/typechecks/migrations. These do not constitute school approval, complete financial acceptance, PDF/printer validation or production readiness. Requirement IDs and acceptance criteria below remain the target; staging defaults do not replace unresolved decisions D06/D07/D12.
+Evidence on 14 October 2026: 76 backend integration tests across seven suites and 34 Level 4 browser tests passed (33 mocked contracts + one live synthetic flow), alongside builds/typechecks/13 migrations. These do not constitute school approval, external settlement, physical PDF/printer validation or production readiness. Requirement IDs and acceptance criteria below remain the target; demo defaults do not replace unresolved decisions D06/D07/D12.
 
 ## 1. Product objective
 
@@ -103,7 +103,7 @@ Targets below are proposed acceptance targets, not measured legacy baselines.
 | FND-02 / P0 | Manage academic sessions, class/sections/streams, capacity, subject and next-class mapping | Invalid dates/mappings are flagged; current session is unique per school; historical sessions can be viewed without changing operational defaults |
 | FND-03 / P0 | Admin configures school branding, numbering, templates, date/currency and contact masters | Approved legal school name appears consistently; test print preview can be reviewed without issuing a document |
 | FND-04 / P0 | Maintain activity/change history and authorized exports | Record actor/time/reason and relevant before/after values; exported data respects filters and permissions; credentials are never exported |
-| FND-05 / P0 | Admin approval inbox and in-app notifications | Accountant exceptional financial requests and Teacher attendance-correction requests notify Admin; approval is bound to the exact operation/record/version, applied once, and audited; it never grants a permanent broader role |
+| FND-05 / P0 | Admin approval inbox and in-app notifications | Accountant financial requests notify Admin; the demo approval is bound to the exact operation/record/version, applied once, and audited. Teacher attendance-correction notifications remain future work; approval never grants a permanent broader role |
 
 ### 6.2 Admissions
 

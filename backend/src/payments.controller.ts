@@ -54,9 +54,6 @@ export class PaymentsController {
   @Get('receipts/:id') @Roles(...COLLECTION_ROLES)
   getReceipt(@CurrentUser() actor: Actor, @Param('id') id: string) { return this.payments.getReceipt(actor, id); }
 
-  @Get('receipts/:id/pdf') @Roles(...COLLECTION_ROLES)
-  receiptPdf(@CurrentUser() actor: Actor, @Param('id') id: string) { return this.payments.receiptPdfMetadata(actor, id); }
-
   @Post('receipts/:id/print-events') @Roles(...COLLECTION_ROLES)
   reprint(@CurrentUser() actor: Actor, @Param('id') id: string, @Body() body: PaymentActionDto) { return this.payments.reprint(actor, id, body.reason); }
 

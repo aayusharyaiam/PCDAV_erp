@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { AppShell, EmptyState, PageHeader, StatusBadge, useStaffUser } from '@/components/AppShell';
 import { PaymentAllocation } from '@/components/PaymentAllocation';
+import { CorrectionRequestForm } from '@/components/CorrectionRequestForm';
+import { ReceiptPdf } from '@/components/ReceiptPdf';
 import { api, CashierShift, PaymentRecord, PaymentResult, ReceiptDetail, ReceiptPrintResult, ReceiptRecord, rupees, toPaise } from '@/lib/api';
 import { allItems, businessToday, canCorrectPayments, inputAmount, isDefinitiveRejection, messageOf, PaymentCorrectionCommand, PaymentRefundCommand, RefundAttempt } from '@/lib/payments';
 
@@ -20,7 +22,9 @@ function ReceiptWorkspace() {
   const [restored, setRestored] = useState(false);
   const [restoreFailed, setRestoreFailed] = useState(false);
   const posting = useRef(false);
-  const frozen = !!attempt || !restored || restoreFailed;
+  const [requestLocked, setRequestLocked] = useState(false);
+  const [requestPayment, setRequestPayment] = useState<PaymentRecord | null>(null);
+  const frozen = !!attempt || !restored || restoreFailed || requestLocked;
   const [receipts, setReceipts] = useState<ReceiptRecord[]>([]);
   const [pending, setPending] = useState<PaymentRecord[]>([]);
   const [query, setQuery] = useState('');
@@ -51,6 +55,7 @@ function ReceiptWorkspace() {
   useEffect(() => {
     setBusy(true);
     let id = new URLSearchParams(window.location.search).get('receiptId');
+    const paymentId = new URLSearchParams(window.location.search).get('paymentId');
     try {
       const raw = window.sessionStorage.getItem(storageKey);
       if (raw) {
@@ -63,7 +68,10 @@ function ReceiptWorkspace() {
       }
     } catch { setRestoreFailed(true); setError('Unable to restore the saved refund. Resolve its outcome before starting another correction.'); }
     setRestored(true);
-    Promise.all([load(), id ? api<ReceiptDetail>(`/receipts/${encodeURIComponent(id)}`).then(setDetail) : Promise.resolve()])
+    Promise.all([load(), id ? api<ReceiptDetail>(`/receipts/${encodeURIComponent(id)}`).then(setDetail) : paymentId ? api<PaymentResult>(`/payments/${encodeURIComponent(paymentId)}`).then(async result => {
+      if (result.receipt) setDetail(await api<ReceiptDetail>(`/receipts/${result.receipt.id}`));
+      else { setRequestPayment(result.payment); setNotice(`Payment ${result.payment.id}: ${result.payment.status}. No final receipt is issued for this payment.`); }
+    }) : Promise.resolve()])
       .catch(e => setError(messageOf(e))).finally(() => setBusy(false));
   }, [storageKey, user.schoolId]);
 
@@ -86,7 +94,7 @@ function ReceiptWorkspace() {
 
   async function inspect(receipt: ReceiptRecord) {
     if (busy || frozen) return;
-    setBusy(true); setError(''); setDetail(null); setAction(null); setPrintReason('');
+    setBusy(true); setError(''); setDetail(null); setAction(null); setPrintReason(''); setRequestPayment(null);
     try { setDetail(await api<ReceiptDetail>(`/receipts/${receipt.id}`)); }
     catch (e) { setError(messageOf(e)); }
     finally { setBusy(false); }
@@ -181,6 +189,8 @@ function ReceiptWorkspace() {
     <PageHeader eyebrow="Level 4 · Fees & Payments" title="Receipt register" description="Inspect immutable issued snapshots, record reprints, and manage cheque settlement and Admin corrections." action={<button className="button secondary" onClick={() => void refresh()} disabled={busy}>Refresh register</button>} />
     {error && <div className="notice error" role="alert">{error}</div>}
     {notice && <div className="notice success" role="status">{notice}</div>}
+    {!admin && <CorrectionRequestForm payment={requestPayment ?? detail?.payment ?? null} onLock={setRequestLocked} />}
+    {!admin && pending.length > 0 && <div className="panel section-panel"><label htmlFor="request-cheque">Request a pending cheque bounce</label><select id="request-cheque" className="select" disabled={busy || frozen} value={requestPayment?.id ?? ''} onChange={e => setRequestPayment(pending.find(p => p.id === e.target.value) ?? null)}><option value="">Use inspected receipt</option>{pending.map(p => <option key={p.id} value={p.id}>{p.chequeNumber} · {p.payerName} · {p.id}</option>)}</select></div>}
     <section className="panel">
       <div className="panel-header"><h2>Issued receipt register</h2><span>{filtered.length} of {receipts.length} receipts</span></div>
       <div className="filter-row"><input className="input" aria-label="Search receipts" placeholder="Receipt, admission number, student, reference" value={query} onChange={e => setQuery(e.target.value)} /><select className="select" aria-label="Receipt mode" value={mode} onChange={e => setMode(e.target.value)}><option value="">All modes</option><option value="CASH">Cash</option><option value="MANUAL_ELECTRONIC">Manual electronic</option><option value="CHEQUE">Cheque</option></select><select className="select" aria-label="Receipt status" value={status} onChange={e => setStatus(e.target.value)}><option value="">All statuses</option><option value="ISSUED">Issued</option><option value="VOID">Void</option><option value="PARTIALLY_REFUNDED">Partially refunded</option><option value="REFUNDED">Refunded</option></select><input className="input" aria-label="Receipt capture business date" type="date" value={businessDate} onChange={e => setBusinessDate(e.target.value)} /></div>
@@ -194,6 +204,7 @@ function ReceiptWorkspace() {
       <section className="panel section-panel receipt-detail" aria-label="Immutable receipt">
         <div className="panel-header"><div><h2>Receipt {detail.receipt.receiptNumber}</h2><span>Immutable issued snapshot · original {new Date(detail.reprint.originalIssuedAt).toLocaleString('en-IN')}</span></div><StatusBadge status={detail.receipt.status} /></div>
         <h3>{snapshot.school.name}</h3><p>{snapshot.school.address} · {snapshot.school.phone} · {snapshot.school.email}</p>
+        {snapshot.demoPolicy && <p>{snapshot.demoPolicy.label} · Issued policy version {snapshot.demoPolicy.version} · Sequence {snapshot.demoPolicy.scopeKey}</p>}
         <div className="detail-grid">
           <div className="detail-item"><label>Student / class</label><strong>{snapshot.student.admissionNumber} · {snapshot.student.name} · {snapshot.enrollment?.className ?? 'No active enrollment'}</strong></div>
           <div className="detail-item"><label>Received / capture business date</label><strong>{snapshot.payment.businessDate} / {snapshot.payment.captureBusinessDate ?? '—'}</strong></div>
@@ -210,7 +221,8 @@ function ReceiptWorkspace() {
       </section>
       <section className="panel section-panel">
         <h2>Receipt history and actions</h2>
-        <p>Reprint events: {detail.events.filter(event => event.type === 'REPRINT').length}. {detail.reprint.downloadAvailable ? '' : 'PDF download is unavailable; use the snapshot browser print.'}</p>
+        <p>Reprint events: {detail.events.filter(event => event.type === 'REPRINT').length}. Browser print uses the immutable snapshot below.</p>
+        <ReceiptPdf key={`${detail.receipt.id}:${detail.receipt.status}`} receiptId={detail.receipt.id} receiptNumber={detail.receipt.receiptNumber} />
         <form onSubmit={reprint}><div className="form-field"><label htmlFor="print-reason">Reprint reason</label><input className="input" id="print-reason" value={printReason} onChange={e => setPrintReason(e.target.value)} minLength={3} maxLength={500} required /></div><div className="form-actions"><button className="button" disabled={busy}>Print / reprint</button><button type="button" className="button secondary" onClick={() => { setDetail(null); setAction(null); }} disabled={busy || frozen}>Close receipt</button></div></form>
         <p>Current payment status: {detail.payment?.status ?? 'Unavailable'} · Unrefunded amount: {rupees(remainingMinor)}</p>
         {detail.events.map(event => <p key={event.id}>{event.type} · {new Date(event.createdAt).toLocaleString('en-IN')}{typeof event.metadata?.reason === 'string' ? ` · ${event.metadata.reason}` : ''}</p>)}
@@ -219,7 +231,7 @@ function ReceiptWorkspace() {
           {correctable && <><button className="button secondary" disabled={busy || frozen} onClick={() => void beginAction(detail.payment!, 'reverse')}>Reverse payment</button><button className="button secondary" disabled={busy || frozen} onClick={() => void beginAction(detail.payment!, 'refunds')}>Refund payment</button></>}
           {detail.payment.mode === 'CHEQUE' && detail.payment.status === 'CLEARED' && <button className="button danger" disabled={busy || frozen} onClick={() => void beginAction(detail.payment!, 'bounce')}>Bounce cleared cheque</button>}
         </div>}
-        {!admin && <p>Reversal, refund, and cheque bounce are available to Admin/Superadmin only.</p>}
+        {!admin && <p>Use Request correction above to send this payment to the Admin approval inbox.</p>}
       </section>
     </>}
 

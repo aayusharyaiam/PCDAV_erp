@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { AppModule } from '../src/app.module';
 import { Db } from '../src/db';
 import { ApiErrors } from '../src/errors';
+import { cleanupFinance } from './finance-cleanup';
 
 describe('Level 4 payment-to-receipt workflows', () => {
   let app: INestApplication;
@@ -93,6 +94,7 @@ describe('Level 4 payment-to-receipt workflows', () => {
 
   afterAll(async () => {
     if (db && schoolId) {
+      await cleanupFinance(db, schoolId);
       await db.receiptEvent.deleteMany({ where: { schoolId } });
       await db.receipt.deleteMany({ where: { schoolId } });
       await db.paymentEvent.deleteMany({ where: { schoolId } });
@@ -140,8 +142,9 @@ describe('Level 4 payment-to-receipt workflows', () => {
     expect(retry.body.payment.id).toBe(first.body.payment.id);
     expect(first.body.payment.changeMinor).toBe('1000');
     expect(first.body.payment.status).toBe('CAPTURED');
-    expect(first.body.receipt.receiptNumber).toMatch(/^PAYT\/FEE\/2026\/000001$/);
-    expect(first.body.receipt.pdfStatus).toBe('UNAVAILABLE');
+    expect(first.body.receipt.receiptNumber).toMatch(/^DEMO\/FEE\/SCHOOL\/000001$/);
+    expect(first.body.receipt.pdfStatus).toBe('PENDING');
+    expect(await db.receiptPdfJob.count({ where: { receiptId: first.body.receipt.id, receiptStatus: 'ISSUED', status: 'PENDING' } })).toBe(1);
     expect(first.body.receipt.snapshot.payment.receivedAmountMinor).toBe('15000');
     expect(await db.payment.count({ where: { schoolId } })).toBe(1);
     expect(await db.receipt.count({ where: { schoolId } })).toBe(1);
@@ -273,6 +276,7 @@ describe('Level 4 payment-to-receipt workflows', () => {
       const foreign = await db.payment.create({ data: { ...stored, id: randomUUID(), schoolId: foreignSchool.id, quoteId: null, idempotencyKey: randomUUID() } });
       expect(foreign.reference).toBe(stored.reference);
     } finally {
+      await cleanupFinance(db, foreignSchool.id);
       await db.payment.deleteMany({ where: { schoolId: foreignSchool.id } });
       await db.school.delete({ where: { id: foreignSchool.id } });
     }
@@ -364,7 +368,7 @@ describe('Level 4 payment-to-receipt workflows', () => {
     await expect(db.storeIssue.update({ where: { id: issue.id }, data: { paidMinor: 301n } })).rejects.toThrow();
   });
 
-  it('preserves spent credit and rolls back failed reversals until later allocations are reversed', async () => {
+  it('atomically releases traced spent advance without reversing a later independent payment', async () => {
     const student = await freshStudent();
     const original = await electronicFor(student.studentId, '2000');
     expect(original.overpaymentCredit.remainingMinor).toBe('2000');
@@ -374,13 +378,19 @@ describe('Level 4 payment-to-receipt workflows', () => {
     const later = await electronicFor(student.studentId, '100');
     expect(later.creditApplications[0].amountMinor).toBe('1000');
     const correction = { businessDate: '2026-10-14', reason: 'Reverse advance with spent credit' };
-    await client(admin, 'post', `/payments/${original.payment.id}/reverse`).send(correction).expect(409);
-    expect((await db.feeCredit.findUniqueOrThrow({ where: { sourcePaymentId: original.payment.id } })).remainingMinor).toBe(1000n);
-    expect(await db.paymentRefund.count({ where: { paymentId: original.payment.id } })).toBe(0);
-    await client(admin, 'post', `/payments/${later.payment.id}/reverse`).send(correction).expect(201);
-    expect((await db.feeObligation.findUniqueOrThrow({ where: { id: obligation.id } })).creditAppliedMinor).toBe(0n);
+    await client(accountant, 'post', `/payments/${original.payment.id}/reverse`).send(correction).expect(403);
     await client(admin, 'post', `/payments/${original.payment.id}/reverse`).send(correction).expect(201);
+    expect((await db.feeObligation.findUniqueOrThrow({ where: { id: obligation.id } })).creditAppliedMinor).toBe(0n);
     expect((await db.feeCredit.findUniqueOrThrow({ where: { sourcePaymentId: original.payment.id } })).remainingMinor).toBe(0n);
+    expect((await db.payment.findUniqueOrThrow({ where: { id: later.payment.id } })).status).toBe('CAPTURED');
+    expect((await db.feeCredit.findUniqueOrThrow({ where: { sourcePaymentId: later.payment.id } })).remainingMinor).toBe(100n);
+    const release = await db.feeCreditAllocationRelease.findFirstOrThrow({ where: { schoolId, correctionPaymentId: original.payment.id } });
+    expect(release.amountMinor).toBe(1000n);
+    expect(release.restoredToCredit).toBe(false);
+    await client(accountant, 'get', `/students/${student.studentId}/statement`).expect(200).expect(response => { expect(response.body.totals.outstandingMinor).toBe('1000'); expect(response.body.totals.journal.reconciled).toBe(true); });
+    await client(admin, 'post', `/payments/${later.payment.id}/reverse`).send(correction).expect(201);
+    expect((await db.feeCredit.findUniqueOrThrow({ where: { sourcePaymentId: original.payment.id } })).remainingMinor).toBe(0n);
+    expect(await db.feeCreditAllocationRelease.count({ where: { allocationId: release.allocationId } })).toBe(1);
     await client(admin, 'post', `/payments/${original.payment.id}/reverse`).send(correction).expect(409);
   });
 
@@ -432,6 +442,8 @@ describe('Level 4 payment-to-receipt workflows', () => {
     const quote = await quoteFor(student.studentId, '500');
     const sequence = await db.receiptSequence.findUniqueOrThrow({ where: { schoolId } });
     const audits = await db.auditEvent.count({ where: { schoolId } });
+    const journalEntries = await db.journalEntry.count({ where: { schoolId } });
+    const pdfJobs = await db.receiptPdfJob.count({ where: { schoolId } });
     const body = electronicBody(quote);
     const key = randomUUID();
     // Fail at the final receipt-number allocation, after settlement writes.
@@ -443,6 +455,8 @@ describe('Level 4 payment-to-receipt workflows', () => {
       expect(await db.payment.count({ where: { schoolId, studentId: student.studentId } })).toBe(0);
       expect(await db.feeCredit.count({ where: { schoolId, studentId: student.studentId } })).toBe(0);
       expect(await db.auditEvent.count({ where: { schoolId } })).toBe(audits);
+      expect(await db.journalEntry.count({ where: { schoolId } })).toBe(journalEntries);
+      expect(await db.receiptPdfJob.count({ where: { schoolId } })).toBe(pdfJobs);
     } finally {
       await db.receiptSequence.update({ where: { schoolId }, data: { nextNumber: sequence.nextNumber } });
     }

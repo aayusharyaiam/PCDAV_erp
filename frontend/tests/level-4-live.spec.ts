@@ -3,8 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-// Opt-in LIVE Next -> API -> PostgreSQL smoke test. Only generated synthetic
-// school records are removed; never truncates, seeds, or resets shared data.
+// Opt-in LIVE Next -> API -> PostgreSQL smoke test. Immutable financial history
+// is retained under a unique synthetic school; fixture users are disabled and
+// sessions removed afterward. Never bypass immutability or reset shared data.
 test.describe('Level 4 live collection', () => {
   test.skip(!process.env.E2E_DATABASE_URL, 'Set E2E_DATABASE_URL to the local API database to opt in');
   let db: import('../../backend/node_modules/@prisma/client').PrismaClient;
@@ -13,6 +14,7 @@ test.describe('Level 4 live collection', () => {
   let issueId: string;
   const unique = randomUUID();
   const email = `live-level4-${unique}@example.test`;
+  const adminEmail = `live-level4-admin-${unique}@example.test`;
   const password = `Synthetic-${unique}`;
   const admission = `E2E-${unique.slice(0, 8)}`;
   const date = '2026-10-13';
@@ -32,6 +34,7 @@ test.describe('Level 4 live collection', () => {
     studentId = student.id;
     const enrollment = await db.enrollment.create({ data: { schoolId, studentId, sessionId: session.id, classId: classroom.id, startDate: new Date('2026-04-01') } });
     const user = await db.user.create({ data: { schoolId, name: 'Synthetic cashier', email, passwordHash: await backend('argon2').hash(password), role: 'ACCOUNTANT', mustChangePassword: false } });
+    await db.user.create({ data: { schoolId, name: 'Synthetic Admin', email: adminEmail, passwordHash: await backend('argon2').hash(password), role: 'ADMIN', mustChangePassword: false } });
     const head = await db.feeHead.create({ data: { schoolId, code: 'TUITION', name: 'Live tuition', category: 'MONTHLY' } });
     await db.feeObligation.create({ data: { schoolId, studentId, enrollmentId: enrollment.id, feeHeadId: head.id, periodKey: '2026-04', dueDate: new Date('2026-04-05'), amountMinor: BigInt(100000) } });
     issueId = (await db.storeIssue.create({ data: { schoolId, studentId, enrollmentId: enrollment.id, issueNumber: 'LIVE-STORE-001', issuedAt: new Date('2026-04-01'), totalMinor: BigInt(20000), reason: 'Synthetic issue fixture', createdBy: user.id } })).id;
@@ -42,27 +45,18 @@ test.describe('Level 4 live collection', () => {
     try {
       if (schoolId) {
         const where = { schoolId };
-        await db.refundCommand.deleteMany({ where });
-        await db.receiptEvent.deleteMany({ where }); await db.receipt.deleteMany({ where });
-        await db.paymentEvent.deleteMany({ where }); await db.paymentCreditRelease.deleteMany({ where });
-        await db.paymentAllocationRelease.deleteMany({ where }); await db.paymentCreditApplication.deleteMany({ where });
-        await db.paymentAllocation.deleteMany({ where }); await db.paymentRefund.deleteMany({ where });
-        await db.payment.deleteMany({ where }); await db.paymentQuote.deleteMany({ where });
-        await db.receiptSequence.deleteMany({ where }); await db.cashierShift.deleteMany({ where });
-        await db.feeCredit.deleteMany({ where }); await db.feeObligation.deleteMany({ where });
-        await db.storeIssue.deleteMany({ where }); await db.auditEvent.deleteMany({ where });
         const users = await db.user.findMany({ where, select: { id: true } });
         await db.loginSession.deleteMany({ where: { userId: { in: users.map(user => user.id) } } });
-        await db.user.deleteMany({ where }); await db.enrollment.deleteMany({ where });
-        await db.student.deleteMany({ where }); await db.family.deleteMany({ where });
-        await db.feeHead.deleteMany({ where }); await db.classOffering.deleteMany({ where });
-        await db.academicSession.deleteMany({ where }); await db.school.delete({ where: { id: schoolId } });
+        await db.user.updateMany({ where, data: { active: false } });
+        console.info(`Retained immutable synthetic Level 4 history in school ${schoolId}; fixture accounts disabled.`);
       }
     } finally { await db.$disconnect(); }
   });
 
-  test('opens shift, posts partial cash with store settlement, reads receipt and closes on live totals', async ({ page }) => {
+  test('collects, deposits, requests and approves a refund, then reconciles live reports and shift', async ({ page }) => {
     test.setTimeout(120_000);
+    // No financial API mocking. Only remove an unrelated external font fetch.
+    await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
     const browserErrors: string[] = [];
     page.on('pageerror', error => browserErrors.push(error.message));
     await page.goto('/login');
@@ -70,6 +64,8 @@ test.describe('Level 4 live collection', () => {
     await page.getByLabel('Password').fill(password);
     await page.getByRole('button', { name: 'Sign in securely' }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
+    const policyStatus = await page.evaluate(async () => (await fetch('/api/v1/finance/policy', { credentials: 'include' })).status);
+    expect(policyStatus, 'Live API must have the new Level 4 contracts deployed').toBe(200);
 
     await page.goto('/cashier');
     await page.getByLabel('Business date', { exact: true }).fill(date);
@@ -116,11 +112,60 @@ test.describe('Level 4 live collection', () => {
 
     await page.goto('/cashier');
     await expect(page.getByRole('region', { name: 'Selected shift' })).toContainText('₹700.00');
-    await page.getByLabel('Counted cash ₹').fill('700');
+    await page.getByLabel('Movement type').selectOption('DEPOSIT');
+    await page.getByLabel('Movement amount ₹').fill('100');
+    await page.getByLabel('Movement reference').fill('SYNTHETIC-DEPOSIT');
+    await page.getByLabel('Movement reason').fill('Synthetic deposit only');
+    await page.getByRole('button', { name: 'Record cash movement' }).click();
+    await expect(page.getByRole('status')).toContainText('DEPOSIT recorded');
+    await expect(page.getByRole('region', { name: 'Selected shift' })).toContainText('₹600.00');
+
+    const issued = await db.receipt.findFirstOrThrow({ where: { schoolId } });
+    const openShift = await db.cashierShift.findFirstOrThrow({ where: { schoolId } });
+    await page.goto(`/receipts?receiptId=${issued.id}`);
+    await page.getByRole('button', { name: 'Request correction', exact: true }).click();
+    await page.getByLabel('Requested refund ₹').fill('50');
+    await page.getByLabel('Requested payout shift').selectOption(openShift.id);
+    await page.getByLabel('Request reason', { exact: true }).fill('Synthetic correction request');
+    await page.getByLabel('Request reference', { exact: true }).fill('SYNTHETIC-REFUND');
+    await page.getByRole('button', { name: 'Submit correction request' }).click();
+    await expect(page.getByRole('region', { name: 'Correction request' })).toContainText('REQUESTED');
+    expect(await db.paymentRefund.count({ where: { schoolId } })).toBe(0);
+    await page.getByRole('button', { name: /Sign out/ }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await page.goto('/login');
+    await page.getByLabel('Email address').fill(adminEmail); await page.getByLabel('Password').fill(password);
+    await page.getByRole('button', { name: 'Sign in securely' }).click(); await expect(page).toHaveURL(/\/dashboard$/);
+    await page.goto('/finance/requests');
+    await page.getByRole('button', { name: 'Review request' }).click();
+    await page.getByLabel('Decision reason').fill('Synthetic Admin approval');
+    await page.getByRole('button', { name: 'Submit decision' }).click();
+    await expect(page.getByRole('status')).toContainText('Server decision: APPLIED');
+    expect(await db.paymentRefund.count({ where: { schoolId } })).toBe(1);
+    const refund = await db.paymentRefund.findFirstOrThrow({ where: { schoolId } }); expect(refund.amountMinor).toBe(BigInt(5000));
+    await page.goto(`/receipts?receiptId=${issued.id}`);
+    await expect(page.getByRole('region', { name: 'Immutable receipt' })).toContainText('PARTIALLY REFUNDED');
+    await expect(page.getByRole('region', { name: 'Immutable receipt' })).toContainText('Synthetic live student');
+
+    await page.goto('/reports');
+    await page.getByLabel('From business date').fill(date); await page.getByLabel('To business date').fill(date);
+    await page.getByRole('button', { name: 'Apply report filters' }).click();
+    await expect(page.getByLabel('Full filtered totals')).toContainText('₹550.00');
+    await page.getByRole('button', { name: 'Journal', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Journal · full filtered totals' })).toBeVisible();
+    await expect(page.getByLabel('Full filtered totals')).toContainText('BalancedYes');
+    await page.goto(`/statements?studentId=${studentId}`);
+    await expect(page.getByRole('heading', { name: /Student statement/ })).toBeVisible();
+    await expect(page.getByText('Synthetic renamed student', { exact: false }).first()).toBeVisible();
+
+    await page.goto('/cashier');
+    await page.getByRole('button', { name: 'View shift' }).click();
+    await expect(page.getByRole('region', { name: 'Selected shift' })).toContainText('₹550.00');
+    await page.getByLabel('Counted cash ₹').fill('550');
     await page.getByRole('button', { name: 'Close shift', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Cashier shift closed' })).toBeVisible();
     const shift = await db.cashierShift.findFirstOrThrow({ where: { schoolId } });
-    expect(shift.status).toBe('CLOSED'); expect(shift.expectedCashMinor).toBe(BigInt(70000)); expect(shift.varianceMinor).toBe(BigInt(0));
+    expect(shift.status).toBe('CLOSED'); expect(shift.expectedCashMinor).toBe(BigInt(55000)); expect(shift.varianceMinor).toBe(BigInt(0));
     expect(browserErrors).toEqual([]);
   });
 });

@@ -388,6 +388,7 @@ model FeeObligation {
   paidMinor           BigInt   @default(0)
   status              String   @default("OPEN")
   assessedAt          DateTime @default(now())
+  bouncePaymentId     String?  @unique
 
   @@unique([schoolId, enrollmentId, feeHeadId, periodKey])
   @@index([schoolId, studentId, dueDate, status])
@@ -652,13 +653,14 @@ model PaymentCreditRelease {
   id            String   @id @default(uuid())
   schoolId      String
   paymentId     String
-  applicationId String   @unique
+  applicationId String
   amountMinor   BigInt
   reason        String
   createdBy     String
   createdAt     DateTime @default(now())
 
   @@index([schoolId, paymentId])
+  @@index([applicationId])
 }
 
 model PaymentAllocationRelease {
@@ -793,4 +795,157 @@ model AuditEvent {
 
   @@index([schoolId, createdAt])
   @@index([schoolId, entityId])
+}
+
+// Version 1 is an explicitly synthetic/demo policy, never school approval.
+model FinancePolicy {
+  schoolId             String @id
+  version              Int @default(1)
+  receiptPrefix        String @default("DEMO/FEE")
+  receiptScope         String @default("SCHOOL")
+  allowAdvance         Boolean @default(true)
+  blockPreviousSession Boolean @default(false)
+  bounceFeeMinor       BigInt @default(0)
+}
+
+model FinancePolicyVersion {
+  id        String @id @default(uuid())
+  schoolId  String
+  version   Int
+  snapshot  Json
+  reason    String
+  createdBy String
+  createdAt DateTime @default(now())
+
+  @@unique([schoolId, version])
+}
+
+model ReceiptSeries {
+  id         String @id @default(uuid())
+  schoolId   String
+  prefix     String
+  scopeKey   String
+  nextNumber Int @default(1)
+
+  @@unique([schoolId, prefix, scopeKey])
+}
+
+model FinanceRequest {
+  id             String @id @default(uuid())
+  schoolId       String
+  paymentId      String
+  type           String
+  amountMinor    BigInt?
+  reason         String
+  reference      String @default("")
+  businessDate   DateTime? @db.Date
+  shiftId        String?
+  status         String @default("REQUESTED")
+  requestedBy    String
+  idempotencyKey String
+  requestHash    String
+  fingerprint    String
+  createdAt      DateTime @default(now())
+  decidedBy      String?
+  decidedAt      DateTime?
+  decisionReason String?
+
+  @@unique([schoolId, requestedBy, idempotencyKey])
+  @@index([schoolId, status, createdAt])
+}
+
+model CashMovement {
+  id             String @id @default(uuid())
+  schoolId       String
+  shiftId        String
+  type           String
+  amountMinor    BigInt
+  reason         String
+  reference      String
+  createdBy      String
+  idempotencyKey String
+  requestHash    String
+  createdAt      DateTime @default(now())
+
+  @@unique([schoolId, createdBy, idempotencyKey])
+  @@index([schoolId, shiftId, createdAt])
+}
+
+model FeeCreditAllocation {
+  id                  String @id @default(uuid())
+  schoolId            String
+  studentId           String
+  creditId            String
+  obligationId        String
+  paymentId           String?
+  legacyApplicationId String? @unique
+  source              String
+  amountMinor         BigInt
+  createdAt           DateTime @default(now())
+
+  @@index([schoolId, creditId])
+  @@index([schoolId, studentId, obligationId])
+  @@index([schoolId, paymentId])
+}
+
+model FeeCreditAllocationRelease {
+  id                  String @id @default(uuid())
+  schoolId            String
+  allocationId        String
+  correctionPaymentId String
+  amountMinor         BigInt
+  restoredToCredit    Boolean
+  reason              String
+  createdBy           String
+  createdAt           DateTime @default(now())
+
+  @@index([schoolId, allocationId])
+  @@index([schoolId, correctionPaymentId])
+}
+
+model JournalEntry {
+  id           String @id @default(uuid())
+  schoolId     String
+  businessDate DateTime @db.Date
+  sourceType   String
+  sourceId     String
+  description  String
+  createdAt    DateTime @default(now())
+  lines        JournalLine[]
+
+  @@unique([id, schoolId])
+  @@index([schoolId, businessDate])
+  @@index([schoolId, sourceType, sourceId])
+}
+
+model JournalLine {
+  id          String @id @default(uuid())
+  schoolId    String
+  entryId     String
+  entry       JournalEntry @relation(fields: [entryId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  account     String
+  studentId   String?
+  debitMinor  BigInt @default(0)
+  creditMinor BigInt @default(0)
+
+  @@index([schoolId, studentId, account])
+  @@index([entryId])
+}
+
+model ReceiptPdfJob {
+  id            String @id @default(uuid())
+  schoolId      String
+  receiptId     String
+  receiptStatus String
+  status        String @default("PENDING")
+  attempts      Int @default(0)
+  content       Bytes?
+  sha256        String?
+  errorCode     String?
+  requestedBy   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([receiptId, receiptStatus])
+  @@index([schoolId, status])
 }

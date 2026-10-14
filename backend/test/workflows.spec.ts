@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { AppModule } from '../src/app.module';
 import { Db } from '../src/db';
 import { ApiErrors } from '../src/errors';
+import { cleanupFinance } from './finance-cleanup';
 
 // Uses isolated, generated school IDs in the configured test database. No reset/truncate.
 describe('Levels 1–3 PostgreSQL workflows', () => {
@@ -42,6 +43,7 @@ describe('Levels 1–3 PostgreSQL workflows', () => {
   });
   afterAll(async () => {
     if (db && schoolId) {
+      await cleanupFinance(db, schoolId);
       await db.storeIssueLine.deleteMany({ where: { schoolId } }); await db.storeIssue.deleteMany({ where: { schoolId } }); await db.storeStockMovement.deleteMany({ where: { schoolId } }); await db.storeStockReceiptLine.deleteMany({ where: { schoolId } }); await db.storeStockReceipt.deleteMany({ where: { schoolId } }); await db.storeClusterLine.deleteMany({ where: { schoolId } }); await db.storeCluster.deleteMany({ where: { schoolId } }); await db.storeProduct.deleteMany({ where: { schoolId } }); await db.storeVendor.deleteMany({ where: { schoolId } }); await db.storeGroup.deleteMany({ where: { schoolId } });
       await db.feeObligation.deleteMany({ where: { schoolId } }); await db.feeCredit.deleteMany({ where: { schoolId } }); await db.serviceAssignment.deleteMany({ where: { schoolId } }); await db.transportVehicle.deleteMany({ where: { schoolId } }); await db.transportRoute.deleteMany({ where: { schoolId } });
       await db.auditEvent.deleteMany({ where: { schoolId } }); await db.document.deleteMany({ where: { schoolId } });

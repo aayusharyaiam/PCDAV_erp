@@ -15,6 +15,10 @@ const links = [
   { href: '/fees/collect', label: 'Collect payment', icon: '＋', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
   { href: '/receipts', label: 'Receipts', icon: '▤', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
   { href: '/cashier', label: 'Cashier shifts', icon: '◒', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
+  { href: '/finance/requests', label: 'Approval inbox', icon: '✓', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
+  { href: '/finance/policy', label: 'Demo financial policy', icon: '⚙', roles: ['SUPERADMIN', 'ADMIN'] },
+  { href: '/reports', label: 'Financial reports', icon: '▦', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
+  { href: '/statements', label: 'Student statement', icon: '▤', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
   { href: '/services', label: 'Transport & hostel', icon: '⌂', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
   { href: '/transport', label: 'Transport management', icon: '▰', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
   { href: '/store', label: 'Store management', icon: '▤', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
@@ -63,9 +67,21 @@ export function AppShell({ children }: { children: ReactNode }) {
     <main className="main-area">
       <header className="topbar"><button className="mobile-nav-toggle" aria-label="Open navigation" onClick={() => setMenuOpen(true)}>☰</button><div className="breadcrumbs">P DAV PUBLIC SCHOOL <span>/</span> Staff workspace</div><div className="top-actions">{offline && <span className="offline-badge">API reconnecting</span>}<div className="user-pill"><div className="avatar">{user?.name.charAt(0)}</div><div><strong>{user?.name}</strong><span>{roleLabel(user?.role)}</span></div></div></div></header>
       {menuOpen && <div className="mobile-menu-backdrop" onClick={() => setMenuOpen(false)}><nav className="mobile-menu" aria-label="Mobile navigation" onClick={event => event.stopPropagation()}><div className="mobile-menu-header"><strong>PCDAV ERP</strong><button aria-label="Close navigation" onClick={() => setMenuOpen(false)}>×</button></div>{allowed.map(link => <Link className={`nav-link ${pathname === link.href || pathname.startsWith(`${link.href}/`) ? 'active' : ''}`} href={link.href} onClick={() => setMenuOpen(false)} key={link.href}><span>{link.icon}</span>{link.label}</Link>)}<button className="logout-link" onClick={() => void logout()}>Sign out</button></nav></div>}
-      <div className="content"><StaffContext.Provider value={user}>{children}</StaffContext.Provider></div>
+      <div className="content"><div className="notice demo-banner"><strong>DEMO · Synthetic data only</strong><p>Financial rules are configurable demo defaults. Real-school rates, bank execution, and production use are not approved.</p></div><StaffContext.Provider value={user}>{user.role !== 'TEACHER' && <ApprovalNotification />}{children}</StaffContext.Provider></div>
     </main>
   </div>;
+}
+
+function ApprovalNotification() {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => { api<{ total: number }>('/finance/requests?status=REQUESTED&page=1&limit=1').then(r => { if (active) setCount(r.total); }).catch(() => { if (active) setCount(null); }); };
+    refresh(); const timer = window.setInterval(refresh, 60_000);
+    window.addEventListener('finance-requests-changed', refresh);
+    return () => { active = false; clearInterval(timer); window.removeEventListener('finance-requests-changed', refresh); };
+  }, []);
+  return <p className="approval-notification"><Link className="text-link" href="/finance/requests">Approval inbox · {count === null ? 'count unavailable' : `${count} requested`}</Link></p>;
 }
 
 function roleLabel(role?: Role) { return role ? role.charAt(0) + role.slice(1).toLowerCase() : 'Loading'; }

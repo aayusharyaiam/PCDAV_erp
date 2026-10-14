@@ -33,6 +33,22 @@ export async function logout() {
   try { await api('/auth/logout', { method: 'POST' }); } finally { window.localStorage.removeItem('pcdav_csrf'); window.localStorage.removeItem('pcdav_user'); window.location.href = '/login'; }
 }
 
+export async function downloadReceiptPdf(id: string, filename: string) {
+  const response = await fetch(`${API_URL}/receipts/${encodeURIComponent(id)}/pdf`, { credentials: 'include', cache: 'no-store', headers: { Accept: 'application/pdf' } });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    if (response.status === 401) { window.localStorage.removeItem('pcdav_user'); window.localStorage.removeItem('pcdav_csrf'); window.location.replace('/login'); }
+    const error = new Error(body.message ?? 'PDF download failed; check the current job status.') as ApiError;
+    error.status = response.status; error.requestId = body.requestId; throw error;
+  }
+  if (!response.headers.get('content-type')?.includes('application/pdf')) throw new Error('The server did not return a PDF. Refresh its status.');
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${filename.replace(/[^A-Za-z0-9._-]/g, '_')}.pdf`;
+  document.body.appendChild(anchor); anchor.click(); anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export type Role = 'SUPERADMIN' | 'ADMIN' | 'ACCOUNTANT' | 'TEACHER';
 export type User = { id: string; schoolId: string; name: string; email: string; role: Role; active: boolean; version: number; mustChangePassword: boolean; createdAt?: string };
 export type School = { id: string; name: string; address: string; phone: string; email: string; timezone: string; admissionPrefix: string; nextAdmission: number; version: number };
@@ -59,7 +75,7 @@ export type StoreIssue = { id: string; issueNumber: string; studentId: string; i
 export type PaymentQuoteLine = { targetType: 'FEE' | 'STORE'; targetId: string; reference: string; description: string; dueDate: string; beforeOutstandingMinor: string; creditAppliedMinor: string; paymentAllocatedMinor: string; afterOutstandingMinor: string };
 export type AllocationSummary = { creditAppliedMinor: string; paymentAllocatedMinor: string; projectedOutstandingMinor: string; projectedCreditMinor: string };
 export type CreditApplication = { creditId: string; targetId: string; amountMinor: string };
-export type AllocationPlan = AllocationSummary & { amountMinor: string; availableCreditMinor: string; newCreditMinor: string; lines: PaymentQuoteLine[]; creditApplications: CreditApplication[] };
+export type AllocationPlan = AllocationSummary & { amountMinor: string; availableCreditMinor: string; newCreditMinor: string; lines: PaymentQuoteLine[]; creditApplications: CreditApplication[]; selection?: { obligationIds?: string[]; storeIssueIds?: string[] }; policyVersion?: number; balanceFingerprint?: string };
 export type PaymentQuote = AllocationSummary & { id: string; schoolId: string; studentId: string; createdBy: string; version: number; status: 'OPEN' | 'CONSUMED'; amountMinor: string; availableCreditMinor: string; allocationPlan: AllocationPlan; allocations: PaymentQuoteLine[]; creditApplications: CreditApplication[]; expiresAt: string; createdAt: string };
 export type PaymentMode = 'CASH' | 'MANUAL_ELECTRONIC' | 'CHEQUE';
 export type ElectronicChannel = 'UPI' | 'BANK_TRANSFER' | 'CARD' | 'OTHER';
@@ -67,6 +83,7 @@ export type PaymentStatus = 'PENDING_CHEQUE' | 'CAPTURED' | 'CLEARED' | 'BOUNCED
 export type PaymentRecord = { id: string; schoolId: string; studentId: string; cashierId: string; shiftId: string; quoteId: string | null; idempotencyKey: string; requestHash: string; businessDate: string; mode: PaymentMode; status: PaymentStatus; currency: string; receivedAmountMinor: string; tenderedAmountMinor: string | null; changeMinor: string; payerName: string; payerPhone: string; reference: string; electronicChannel: ElectronicChannel | ''; chequeNumber: string; chequeBank: string; chequeDate: string | null; createdAt: string; updatedAt: string; capturedAt: string | null; captureBusinessDate: string | null; captureShiftId: string | null };
 export type ReceiptSnapshot = {
   receiptNumber: string; currency: string; templateVersion: string;
+  demoPolicy?: { version: number; receiptPrefix: string; receiptScope: 'SCHOOL' | 'FINANCIAL_YEAR'; scopeKey: string; financialYearStartMonth: number; label: string };
   school: { id: string; name: string; address: string; phone: string; email: string };
   student: { id: string; name: string; admissionNumber: string };
   enrollment: { id: string; sessionId: string; classId: string; className: string } | null;
@@ -82,7 +99,7 @@ export type ReprintMetadata = { receiptId: string; receiptNumber: string; origin
 export type ReceiptDetail = { receipt: ReceiptRecord; payment: PaymentRecord | null; events: ReceiptEvent[]; paymentEvents: PaymentEvent[]; refunds: PaymentRefund[]; reprint: ReprintMetadata };
 export type ReceiptPrintResult = { receipt: ReceiptRecord; printEvent: ReceiptEvent; reprint: ReprintMetadata };
 export type PaymentResult = { payment: PaymentRecord; receipt: ReceiptRecord | null; refunds: PaymentRefund[]; events: PaymentEvent[]; pdfStatus: string };
-export type CashierShift = { id: string; schoolId: string; cashierId: string; businessDate: string; status: 'OPEN' | 'CLOSED'; openingFloatMinor: string; expectedCashMinor: string | null; countedCashMinor: string | null; varianceMinor: string | null; openedAt: string; closedAt: string | null; closeReason: string };
+export type CashierShift = { id: string; schoolId: string; cashierId: string; businessDate: string; status: 'OPEN' | 'CLOSED'; openingFloatMinor: string; expectedCashMinor: string | null; countedCashMinor: string | null; varianceMinor: string | null; openedAt: string; closedAt: string | null; closeReason: string; cashReceivedMinor: string; cashRefundedMinor: string; cashMovedMinor: string };
 export const rupees = (minorAmount: string | bigint) => { const signed = BigInt(minorAmount); const value = signed < BigInt(0) ? -signed : signed; const hundred = BigInt(100); return `${signed < BigInt(0) ? '-' : ''}₹${(value / hundred).toLocaleString('en-IN')}.${String(value % hundred).padStart(2, '0')}`; };
 export function toPaise(value: string): string {
   if (!/^\d{1,10}(\.\d{1,2})?$/.test(value)) throw new Error('Enter an amount with at most two decimal places');

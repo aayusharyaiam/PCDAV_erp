@@ -1,21 +1,21 @@
 # Design specification — improved school ERP
 
-**Version:** 0.4, revised 13 October 2026
+**Version:** 0.5, revised 14 October 2026
 
-**Status:** target UX/UI specification with implemented staging routes and explicit remaining gaps
+**Status:** target UX/UI specification with implemented synthetic-demo routes and explicit remaining production gaps
 **Requirements:** [prd.md](prd.md)  
 **Existing-system evidence:** [feature-audit.md](feature-audit.md)
 
 ## Current staging screens versus target design
 
-The staff app now includes `/applications`, `/students`, `/academic`, `/users`, `/audit`, `/fees/plans`, `/fees/ledger`, `/services`, `/transport`, `/store`, `/fees/collect`, `/receipts` and `/cashier`. Screen specifications below describe the complete target experience, not all current UI capabilities.
+The staff app now includes `/applications`, `/students`, `/academic`, `/users`, `/audit`, `/fees/plans`, `/fees/ledger`, `/services`, `/transport`, `/store`, `/fees/collect`, `/receipts`, `/cashier`, `/finance/requests`, `/finance/policy`, `/reports` and `/statements`. Screen specifications below describe the complete target experience, not all current UI capabilities.
 
-- Collection uses admission-number search, server quote/review, automatic oldest-due fee/store allocation, partial/advance credit, cash change, verified manual electronic capture and pending cheque capture. Individual obligation selection is not yet available.
+- Collection uses admission-number search, server quote/review, automatic or selected fee/store allocation, partial/advance credit, cash change, verified manual electronic capture and pending cheque capture. Selection is available for the synthetic demo; school-specific allocation rules still require approval.
 - Payment and partial-refund retries preserve the original payload/key after uncertain responses, including reload. A rejected retry does not disprove an earlier commit. Corrupt payment recovery storage blocks a fresh collection until its outcome is resolved.
-- `/receipts` combines issued snapshots, pending cheque actions, direct Admin corrections and reasoned browser reprints. The Accountant approval-request screen remains pending. PDF download is explicitly unavailable, not a running background job.
-- `/cashier` provides shift opening, server expected cash, counted cash and variance close. Deposits, handovers and full reconciliation panels remain pending.
+- `/receipts` combines issued snapshots, pending cheque actions, Accountant correction requests, Admin decisions, reasoned browser reprints and current-status PDF status/download/retry. The PDF worker is bounded inside the API for the synthetic demo; production object storage/worker and printer approval remain open.
+- `/cashier` provides shift opening, server expected cash, deposits, handovers, Admin expenses, counted cash and variance close. `/reports` and `/statements` provide the current demo reconciliation views; statutory/report acceptance remains pending.
 - Role-aware navigation and API authorization are implemented; the shell's school/session display is still a staging label, not a dynamic historical context selector. Rich dashboard metrics, Student 360 financial tabs, attendance, promotion, leaving and certificate screens remain target work.
-- Verification: 23 mocked browser contract tests plus one live synthetic collection/store/receipt/close flow pass. Existing Level 1–3 mobile checks are earlier evidence; physical print, full accessibility and school usability approval remain open. See [PROGRESS.md](PROGRESS.md).
+- Verification: 33 mocked browser contract tests plus one live synthetic collection/store/receipt/approval/report/PDF/close flow pass. Existing Level 1–3 mobile checks are earlier evidence; physical print, full accessibility and school usability approval remain open. See [PROGRESS.md](PROGRESS.md).
 
 ## 1. Design direction
 
@@ -162,6 +162,9 @@ Verify contrast in the implemented components; color must never be the only stat
 | S23 | Special-access requests `/access-requests` | FND-05, PAY-06 |
 | S24 | Transport management `/transport` | SRV-01, SRV-02 |
 | S25 | Store management `/store` | Inventory/issues and shared payment settlement in staging; full financial release follows PAY-01–PAY-06 |
+| S26 | Finance requests `/finance/requests` | FND-05, PAY-06; Accountant request and Admin/Superadmin decision |
+| S27 | Finance policy `/finance/policy` | FEE-01, PAY-01, PAY-05; versioned synthetic demo defaults |
+| S28 | Statements `/statements` | STU-01, REP-01; fee/store/payment/credit lineage |
 
 ## 6. Core screen specifications
 
@@ -269,7 +272,7 @@ All data in this wireframe is synthetic. The totals intentionally distinguish as
 - “Review payment” shows final amount, mode, allocation, remaining due/credit and depositor. Confirmation button reads `Record ₹1,600 payment`.
 - After submission, display `Recording…`. On timeout, display `Checking payment status…`; query the original command before offering a retry.
 - Success displays receipt number and Print/Download; next student is a separate clear action.
-- No local success message without a committed server result. A queued render should show `Payment recorded · PDF preparing`; the current unconfigured renderer must instead show PDF unavailable. Neither state means the payment failed.
+- No local success message without a committed server result. A queued render should show `Payment recorded · PDF preparing`; a failed job must show an explicit retry path without changing the payment. Neither state means the payment failed.
 
 ### S08 — receipt register/detail
 

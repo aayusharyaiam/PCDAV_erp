@@ -1,13 +1,13 @@
 # Implementation procedure and roadmap
 
-**Version:** 0.4, revised 13 October 2026 (legacy audit: 4 October 2026)
+**Version:** 0.5, revised 14 October 2026 (legacy audit: 4 October 2026)
 **Goal:** replace the core student/fee workflow safely and efficiently, including hostel fees, transport operations, store operations, teacher attendance, teacher classroom promotion decisions, and the confirmed account hierarchy, then expand the ERP in controlled phases.
 
 ## Current delivery position
 
-Levels 1–3, the first operational transport/store slices, and the Level 4 staging collection-to-receipt/basic-close slice are implemented. Management can review payment quotes, partial balances/credit, store settlement, cash/verified manual electronic/cheque flows, receipt snapshots, Admin corrections, and cashier close. Level 4 is not production-complete: approval requests, PDFs, balanced journal/credit lineage, cash movements, full reconciliation and school policy sign-off remain. Live migration, attendance release, promotion, and withdrawal are still approval-gated. `PROGRESS.md` records current tests and the next bounded task.
+Levels 1–3, the first operational transport/store slices, and the synthetic Level 4 demo controls are implemented. Management can review payment quotes, selected/automatic partial balances/credit, store settlement, cash/verified manual electronic/cheque flows, receipt snapshots/PDF jobs, Accountant requests/Admin decisions, balanced journal, cash movements, reports/statements and cashier close. Level 4 is not production-approved: school policy, external settlement, printer/object-storage/worker approval, UAT and recovery remain. Live migration, attendance release, promotion, and withdrawal are still approval-gated. `PROGRESS.md` records current tests and the Render demo next step.
 
-Level 4 corresponds to the collection-to-receipt work in Phase 3 below; level numbers and phase numbers are not interchangeable. The existing 26 backend and 24 Level 4 browser tests are staging evidence, not a completed Phase 3 exit or school UAT. Phase windows and the first-week checklist are the original sequencing guidance, not a current forecast or a list of work to redo.
+Level 4 corresponds to the collection-to-receipt and finance-control work in Phase 3 below; level numbers and phase numbers are not interchangeable. The current 76 backend and 34 Level 4 browser tests are developer evidence, not a completed Phase 3 exit or school UAT. Phase windows and the first-week checklist are the original sequencing guidance, not a current forecast or a list of work to redo.
 
 ## 1. Recommended sequence
 
@@ -118,11 +118,11 @@ Read-only production navigation can illustrate screens; any creation, payment, p
 
 - Implement collection quotes and idempotent transaction commit.
 - Support cash, verified manual bank modes, cheque pending/clearance/bounce, partial payments, remaining balances, and automatic same-student advances/credit.
-- Implement unique receipt numbering, immutable snapshots, PDF generation and reprint.
+- Implement unique receipt numbering, immutable snapshots, current-status PDF generation/jobs and reprint.
 - Add reversals/refunds, cashier shifts/day close, receipt register and student ledger.
 - Test concurrency, lost responses, renderer failures and reconciliation.
 
-**Exit:** complete synthetic payment cycle passes financial acceptance tests and accountant review. Every rupee can be traced through charge, payment, allocation, receipt and report.
+**Current demo exit evidence:** the synthetic payment cycle passes backend/browser checks and traces charge, payment, allocation, credit, correction, receipt, journal and report values. **Production exit remains open** until accountant review, approved policy, settlement matching, printer/object-storage approval and recovery/UAT are complete.
 
 ### Phase 4 — complete core operating workflow
 
@@ -205,7 +205,7 @@ P1/P2 features are estimated separately after discovery. Do not promise a comple
 - Present the fee-rule calculation contract and sample results.
 - Review source-data issues, prototype feedback, next sprint backlog and blocking decisions.
 
-The foundation and demonstration work in this original checklist has since been implemented in staging. Use the current delivery position and section 10 to choose remaining work; do not recreate the workspace or repeat completed foundation tasks.
+The foundation and demonstration work in this original checklist has since been implemented in staging/demo. Use the current delivery position and section 10 to choose remaining work; do not recreate the workspace or repeat completed foundation tasks.
 
 ## 7. Suggested backlog order
 

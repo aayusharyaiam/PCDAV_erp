@@ -2,7 +2,7 @@
 
 The backend is a NestJS + TypeScript modular monolith using Prisma and PostgreSQL.
 
-**Documentation revision:** 0.4 — 13 October 2026. Levels 1–3, transport/store operations and a verified Level 4 staging slice are available. This is not a production financial release; see `../PROGRESS.md` for acceptance gaps and test evidence.
+**Documentation revision:** 0.5 — 14 October 2026. Levels 1–3, transport/store operations and the synthetic-data Level 4 demo controls are available. This is not a production financial release; see `../PROGRESS.md` and `../DEPLOYMENT.md` for acceptance gaps, test evidence and the Render demo procedure.
 
 ## Local setup
 
@@ -24,6 +24,10 @@ npm run start:dev
 API: `http://localhost:4000/api/v1`  
 Health: `http://localhost:4000/health`
 
+### Local demo login
+
+The seed uses the email `superadmin@pcdav.local` unless `SEED_SUPERADMIN_EMAIL` is set. The password is never stored in the repository or printed by the seed; choose it through `SEED_SUPERADMIN_PASSWORD` when running `npm run db:seed`. The initial account has `mustChangePassword=true`, so the first successful login goes to the change-password screen. The Render demo must use a newly chosen private password; do not reuse a real school password.
+
 ## Management-facing API areas
 
 - `/applications`, `/students`, and `/school` — admissions, student records, sessions, classes, and academic setup.
@@ -31,7 +35,9 @@ Health: `http://localhost:4000/health`
 - `/services` — dated hostel and generic service assignments.
 - `/transport/routes`, `/transport/vehicles`, `/transport/allocations`, and `/transport/report` — transport masters, student allocation, capacity checks, and operational lists.
 - `/store/groups`, `/store/clusters`, `/store/vendors`, `/store/products`, `/store/stock-receipts`, `/store/issues`, and `/store/defaulters` — store inventory and student issue operations.
-- `/payment-quotes`, `/payments`, `/receipts`, `/cashier-shifts`, and `/reports/collections` — Level 4 staging collection, receipt snapshots, corrections and cash close.
+- `/payment-quotes`, `/payments`, `/receipts`, `/cashier-shifts`, and `/reports/*` — Level 4 collection, receipt snapshots, correction history, statements, dues/journal/collection reports and cash close.
+- `/finance/requests` and `/finance/policy` — Accountant correction requests, Admin/Superadmin decisions, and versioned demo financial policy.
+- `/cashier-shifts/:id/movements` — idempotent deposit, handover and Admin expense movements.
 
 ## Implemented levels 1–3
 
@@ -59,25 +65,30 @@ Health: `http://localhost:4000/health`
 - Authenticated writes require `pcdav_session`, same-origin request, and `X-CSRF-Token`.
 - `version` fields are required for mutable student, application, school, and classroom edits.
 - Level 4 payment and refund commands require `Idempotency-Key`. Amounts are integer-paise strings, not floating-point rupees. Reuse the exact payload/key after an ambiguous response; never collect/refund again with a fresh key until the original outcome is resolved.
-- Do not use this build to record real payments: it implements a staging financial slice, not all release controls.
+- Do not use this build to record real payments: it implements a synthetic demo financial slice, not all release controls or bank/refund settlement.
 
-## Level 4 staging API contract
+## Level 4 demo API contract
 
 - Open a shift with `POST /cashier-shifts` and `{ businessDate, openingFloatMinor }`.
-- Quote with `POST /payment-quotes` and `{ studentId, amountMinor }`. The response has `id`, `version`, `expiresAt`, `allocations`, and projected outstanding/credit totals. Allocation is automatic oldest-due across fees and store; selection overrides are not implemented.
+- Quote with `POST /payment-quotes` and `{ studentId, amountMinor, obligationIds?, storeIssueIds? }`. The response has `id`, `version`, `expiresAt`, `allocations`, `allocationPlan`, and projected outstanding/credit totals. Omitted arrays use all eligible dues; provided arrays select exact fee/store targets. Credits apply to eligible fees first.
 - Capture with `POST /payments`, an `Idempotency-Key` header, and `{ quoteId, quoteVersion, receivedAmountMinor, currency: "INR", businessDate, mode, payerName }`. `payerPhone` is optional. An open shift for that cashier/date is required.
 - `CASH` requires `tenderedAmountMinor`. `MANUAL_ELECTRONIC` requires `electronicChannel` (`UPI`, `BANK_TRANSFER`, `CARD`, `OTHER`), `reference`, `electronicVerified: true`, and `electronicVerificationNote`. This is staff-confirmed evidence, not bank integration; school/channel/trimmed references cannot be duplicated, including after reversal.
 - `CHEQUE` requires `chequeNumber`, `chequeBank`, `chequeDate`. It remains unallocated with no final receipt until `POST /payments/:id/clear-cheque` with `{ businessDate, reason }`. Pending list: `GET /payments?status=PENDING_CHEQUE`.
-- `GET /payments/:id` returns payment, allocations/releases, credit applications, refunds, events and receipt. `GET /receipts` and `GET /receipts/:id` retain originals and current void/refund status. `POST /receipts/:id/print-events` requires `{ reason }`; `/receipts/:id/pdf` honestly reports PDF generation as unavailable.
-- Admin/Superadmin corrections: `/payments/:id/bounce`, `/reverse`, `/refunds`, with reason and optional correction business date. Refunds additionally require `amountMinor` and `Idempotency-Key`; `reference` is optional. Cash corrections must use an open payout `shiftId` (or the still-open original shift). Closed shift totals are not rewritten.
-- Close with `POST /cashier-shifts/:id/close` and `{ countedCashMinor, reason }`. A nonzero variance needs a reason. Current expected cash is opening float + captured cash − cash corrections; deposits/handovers are not implemented.
+- `GET /payments/:id` returns payment, allocations/releases, credit applications, refunds, events and receipt. `GET /receipts` and `GET /receipts/:id` retain originals and current void/refund status. `POST /receipts/:id/print-events` requires `{ reason }`. Receipt PDFs use `GET /receipts/:id/pdf/status`, `POST /receipts/:id/pdf/retry`, and `GET /receipts/:id/pdf`; a not-yet-ready job returns a retryable response without changing payment state.
+- Accountants submit `/finance/requests`; Admin/Superadmin approve or reject requests. The approval rechecks the frozen financial state and applies the exact correction once. Direct correction endpoints remain audited Admin/Superadmin controls.
+- `GET/POST /finance/policy` exposes the versioned demo policy: receipt prefix/scope, advance-credit behavior, previous-session blocking and bounce fee. Policy changes invalidate stale quotes and do not rewrite old receipt snapshots.
+- `GET/POST /cashier-shifts/:id/movements` supports idempotent `DEPOSIT`, `HANDOVER` and Admin-only `EXPENSE` movements. Closed shifts cannot change. Close with `POST /cashier-shifts/:id/close` and `{ countedCashMinor, reason }`; expected cash is opening + captured − refunds/corrections − movements.
 
 ## Verification and next milestone
 
-The migration history contains eight migrations. The three Level 4 migrations create payment/receipt/shift records, harden balances and receipt originals, and add refund-command idempotency/electronic-reference uniqueness. Regenerate Prisma after schema changes (`npm run db:generate`) and deploy reviewed migrations (`npm run db:migrate`). Before applying the electronic-reference unique index to an existing dataset, reconcile duplicates; do not delete history to force deployment. Existing records are not retroactively marked verified.
+The migration history contains 13 migrations. The Level 4 migrations create payment/receipt/shift records, policy/approval/cash/report/journal/PDF-job records, harden balances and receipt originals, and add append-only financial-history/credit/refund guards. Regenerate Prisma after schema changes (`npm run db:generate`) and deploy reviewed migrations (`npm run db:migrate`). Do not delete history to force deployment. Existing records are not retroactively marked verified; migration backfills use explicit opening entries and retain untraced-history indicators.
 
-`DATABASE_URL=<local-test-url> npm test -- --runInBand` runs 26 integration tests using isolated synthetic school IDs without reset/truncate. `npm run build` compiles the API. Browser contracts and a live end-to-end synthetic payment test are documented in `../frontend/README.md`.
+`DATABASE_URL=<fresh-disposable-test-url> npm test -- --runInBand` runs 76 integration tests across seven suites using synthetic school IDs. Run this against a fresh disposable database/schema, not the seeded demo schema: the database intentionally permits only one Superadmin. `npm run build` compiles the API. Browser contracts and the live end-to-end synthetic Level 4 test are documented in `../frontend/README.md`.
 
-Remaining Level 4 controls: Accountant request/Admin approval workflow, balanced journal and complete credit-allocation lineage, signed receipt-series/policy configuration, document worker/PDFs, cash movements and full reconciliation. Reversal of already-spent advance is deliberately rejected rather than silently removing paid fees; Level 3 assessment-credit recovery still needs a compensating workflow. Import approved live data only after these gates and accountant review.
+Remaining production gates: approved financial policy, external bank/refund settlement, school UAT, physical printer/font approval, private object storage, separate production worker, backups/restore, monitoring, live migration and attendance/lifecycle release. Reversal of already-spent advance is supported only when traceable lineage exists; missing historical evidence remains visible and blocks unsafe correction. Import approved live data only after these gates and accountant review.
 
-The Word file in the repository root is a generated management report, not a financial receipt or evidence that the receipt PDF worker exists.
+The Word file in the repository root is a generated management report, not a financial receipt. The current-status receipt PDF worker exists for the synthetic demo, but its PostgreSQL byte storage and bounded in-API worker are not the production object-storage/worker architecture.
+
+## Render service notes
+
+For a demo deployment, use `NODE_ENV=production`, `APP_MODE=demo`, `DATABASE_URL`, `FRONTEND_ORIGIN`, `PORT` supplied by Render, and secure cookie settings. In demo mode, document uploads are explicitly disabled unless private S3-compatible storage is configured. Run `npm run db:migrate` against the Render database before starting the API; do not use `prisma db push`. The exact service creation, environment-variable and synthetic-seed steps are in `../DEPLOYMENT.md`.

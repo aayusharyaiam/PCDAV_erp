@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { AppShell, EmptyState, PageHeader, StatusBadge, useStaffUser } from '@/components/AppShell';
+import { CashMovements } from '@/components/CashMovements';
 import { api, CashierShift, rupees, toPaise } from '@/lib/api';
 import { allItems, businessToday, canCorrectPayments, CloseShiftCommand, messageOf, OpenShiftCommand } from '@/lib/payments';
 
@@ -16,7 +17,9 @@ function CashierWorkspace() {
   const [countedCash, setCountedCash] = useState('');
   const [reason, setReason] = useState('');
   const [selectedId, setSelectedId] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [working, setBusy] = useState(false);
+  const [movementLocked, setMovementLocked] = useState(true);
+  const busy = working || movementLocked;
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -65,11 +68,13 @@ function CashierWorkspace() {
   return <>
     <PageHeader eyebrow="Level 4 · Reconciliation" title="Cashier shifts" description="Open your business-date counter and close using server-calculated expected cash, counted cash, and a variance reason." action={<button className="button secondary" onClick={() => void refresh()} disabled={busy}>Refresh</button>} />
     {error && <div className="notice error" role="alert">{error}</div>}{notice && <div className="notice success" role="status">{notice}</div>}
+    <CashMovements shift={active} onLock={setMovementLocked} onSaved={() => load()} />
     <section className="panel"><div className="panel-header"><div><h2>Open cashier shift</h2><span>One shift per cashier/business date, including closed shifts. All payment modes require an open shift.</span></div></div>
       <form onSubmit={openShift}><div className="form-grid"><div className="form-field"><label htmlFor="shift-date">Business date</label><input className="input" id="shift-date" type="date" value={businessDate} onChange={e => setBusinessDate(e.target.value)} required /></div><div className="form-field"><label htmlFor="opening-float">Opening float ₹</label><input className="input" id="opening-float" type="number" min="0" step="0.01" value={openingFloat} onChange={e => setOpeningFloat(e.target.value)} required /></div></div>{dateExists && <p>You already have a shift for this date. Select it from history or choose another date.</p>}<div className="form-actions"><button className="button" disabled={busy || !loaded || dateExists}>Open shift</button></div></form>
     </section>
     {active && <section className="panel section-panel" aria-label="Selected shift"><div className="panel-header"><div><h2>Selected shift · {active.businessDate.slice(0, 10)}</h2><span>Shift {active.id} · Cashier {active.cashierId}</span></div><StatusBadge status={active.status} /></div>
       <div className="money-summary"><div><span>Opening float</span><strong>{rupees(active.openingFloatMinor)}</strong></div><div><span>Expected cash</span><strong>{active.expectedCashMinor === null ? '—' : rupees(active.expectedCashMinor)}</strong></div><div><span>Counted cash</span><strong>{active.countedCashMinor === null ? '—' : rupees(active.countedCashMinor)}</strong></div><div><span>Variance</span><strong>{active.varianceMinor === null ? '—' : rupees(active.varianceMinor)}</strong></div></div>
+      <div className="money-summary"><div><span>Cash received</span><strong>{rupees(active.cashReceivedMinor)}</strong></div><div><span>Cash refunded</span><strong>{rupees(active.cashRefundedMinor)}</strong></div><div><span>Cash moved</span><strong>{rupees(active.cashMovedMinor)}</strong></div></div>
       {canClose && <form className="close-shift-form" onSubmit={closeShift}><div className="form-grid"><div className="form-field"><label htmlFor="counted-cash">Counted cash ₹</label><input className="input" id="counted-cash" type="number" min="0" step="0.01" value={countedCash} onChange={e => setCountedCash(e.target.value)} required /></div><div className="cash-change"><span>Live variance</span><strong>{variance === null ? '—' : rupees(variance)}</strong></div><div className="form-field full"><label htmlFor="close-reason">Variance reason (required when counted differs)</label><textarea className="textarea" id="close-reason" value={reason} onChange={e => setReason(e.target.value)} maxLength={500} /></div></div><div className="form-actions"><button className="button" disabled={busy || variance === null}>Close shift</button></div></form>}
       {active.status === 'OPEN' && !canClose && <p>Only this cashier or an Admin/Superadmin can close this shift.</p>}
       {active.status === 'CLOSED' && <p>Closed {active.closedAt ? new Date(active.closedAt).toLocaleString('en-IN') : ''} · {active.closeReason || 'No variance reason needed'}</p>}

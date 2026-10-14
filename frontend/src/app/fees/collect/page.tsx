@@ -19,6 +19,9 @@ function CollectionWorkspace() {
   const [student, setStudent] = useState<Student | null>(null);
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [storeIssues, setStoreIssues] = useState<StoreIssue[]>([]);
+  const [selectDues, setSelectDues] = useState(false);
+  const [obligationIds, setObligationIds] = useState<string[]>([]);
+  const [storeIssueIds, setStoreIssueIds] = useState<string[]>([]);
   const [receivedAmount, setReceivedAmount] = useState('');
   const [quote, setQuote] = useState<PaymentQuote | null>(null);
   const [mode, setMode] = useState<PaymentMode>('CASH');
@@ -52,6 +55,7 @@ function CollectionWorkspace() {
       ]);
       const issues = await allItems<StoreIssue>(`/store/issues?status=OPEN&q=${encodeURIComponent(detail.student.admissionNumber)}`);
       setStudent(detail.student); setLedger(nextLedger); setStoreIssues(issues.filter(issue => issue.studentId === id));
+      setSelectDues(false); setObligationIds(nextLedger.items.filter(item => BigInt(item.outstandingMinor) > BigInt(0)).map(item => item.id)); setStoreIssueIds(issues.filter(issue => issue.studentId === id && BigInt(issue.outstandingMinor) > BigInt(0)).map(issue => issue.id));
       setStudents([]); setQuote(null); setResult(null); setReceivedAmount(''); setPayerName(''); setPayerPhone('');
       setElectronicVerified(false); setElectronicVerificationNote('');
     } catch (e) { setError(messageOf(e)); }
@@ -68,6 +72,9 @@ function CollectionWorkspace() {
         const stored = JSON.parse(raw) as StoredAttempt;
         if (!stored.student.id || stored.quote.id !== stored.command.quoteId || !stored.idempotencyKey) throw new Error('Invalid saved attempt');
         setAttempt(stored); setStudent(stored.student); setQuote(stored.quote);
+        const selection = stored.quote.allocationPlan.selection;
+        setSelectDues(selection?.obligationIds !== undefined || selection?.storeIssueIds !== undefined);
+        setObligationIds(selection?.obligationIds ?? []); setStoreIssueIds(selection?.storeIssueIds ?? []);
         setReceivedAmount(inputAmount(stored.command.receivedAmountMinor));
         setBusinessDate(stored.command.businessDate); setMode(stored.command.mode);
         setTenderedAmount(stored.command.tenderedAmountMinor ? inputAmount(stored.command.tenderedAmountMinor) : '');
@@ -113,10 +120,10 @@ function CollectionWorkspace() {
     try {
       const amountMinor = toPaise(receivedAmount);
       if (BigInt(amountMinor) <= BigInt(0)) throw new Error('Enter an amount greater than zero.');
-      const next = await api<PaymentQuote>('/payment-quotes', { method: 'POST', body: JSON.stringify({ studentId: student.id, amountMinor }) });
+      const next = await api<PaymentQuote>('/payment-quotes', { method: 'POST', body: JSON.stringify({ studentId: student.id, amountMinor, ...(selectDues ? { obligationIds, storeIssueIds } : {}) }) });
       setQuote(next); setClock(Date.now()); setTenderedAmount(inputAmount(next.amountMinor));
       setElectronicVerified(false);
-      setNotice('Review the server allocation before posting. Excess payment becomes student credit.');
+      setNotice('Review the server allocation before posting. Demo policy controls advance credit and previous-session blocking.');
     } catch (e) { setError(messageOf(e)); }
     finally { setBusy(false); }
   }
@@ -187,12 +194,20 @@ function CollectionWorkspace() {
     {student && !result && <section className="panel section-panel">
       <div className="panel-header"><div><h2>2. Review balances</h2><span>Existing credit applies to fees first. The server allocates payment across fee and store dues oldest-first.</span></div></div>
       {ledger && <div className="money-summary"><div><span>Fee outstanding</span><strong>{rupees(ledger.totals.outstandingMinor)}</strong></div><div><span>Store outstanding</span><strong>{rupees(storeIssues.reduce((sum, issue) => sum + BigInt(issue.outstandingMinor), BigInt(0)))}</strong></div><div><span>Available credit</span><strong>{rupees(ledger.totals.availableCreditMinor)}</strong></div></div>}
+      <fieldset disabled={busy || frozen}><legend>Quote selection</legend><label><input type="checkbox" checked={selectDues} onChange={e => { setSelectDues(e.target.checked); setQuote(null); }} /> Select specific fee obligations and store issues</label>
+        {selectDues && <><p>Only checked IDs are sent. An empty selection requests advance credit, subject to server policy. Credit applies to oldest eligible fees first.</p>
+          {ledger?.items.filter(item => BigInt(item.outstandingMinor) > BigInt(0)).map(item => <div key={item.id}><label><input type="checkbox" checked={obligationIds.includes(item.id)} onChange={e => { setObligationIds(ids => e.target.checked ? [...ids, item.id] : ids.filter(id => id !== item.id)); setQuote(null); }} />{item.feeHeadName} · {item.periodKey} · {rupees(item.outstandingMinor)} · {item.id}</label></div>)}
+          {storeIssues.filter(item => BigInt(item.outstandingMinor) > BigInt(0)).map(item => <div key={item.id}><label><input type="checkbox" checked={storeIssueIds.includes(item.id)} onChange={e => { setStoreIssueIds(ids => e.target.checked ? [...ids, item.id] : ids.filter(id => id !== item.id)); setQuote(null); }} />{item.issueNumber} · {rupees(item.outstandingMinor)} · {item.id}</label></div>)}
+        </>}
+      </fieldset>
       <form className="quote-form" onSubmit={createQuote}><div className="form-field"><label htmlFor="received-amount">Amount received / to post ₹</label><input className="input" id="received-amount" type="number" min="0.01" step="0.01" value={receivedAmount} onChange={e => { setReceivedAmount(e.target.value); setQuote(null); }} disabled={busy || frozen} required /><small className="field-hint">Partial payments leave dues open. A payment with no dues becomes advance credit.</small></div><button className="button" disabled={busy || frozen}>Create quote & review</button></form>
     </section>}
     {quote && <section className="panel section-panel">
       <div className="panel-header"><div><h2>3. Review quote</h2><span>Quote {quote.id} · version {quote.version}</span></div><span>{quoteExpired ? 'Expired — fresh payments need a new quote' : `Valid until ${new Date(quote.expiresAt).toLocaleTimeString('en-IN')}`}</span></div>
       <p>Amount to post: <strong>{rupees(quote.amountMinor)}</strong></p>
-      {!quote.allocations.length && <p>No outstanding dues. This payment will become student credit.</p>}
+      {quote.allocationPlan.policyVersion !== undefined && <p>Server demo policy version {quote.allocationPlan.policyVersion}</p>}
+      {(quote.allocationPlan.selection?.obligationIds !== undefined || quote.allocationPlan.selection?.storeIssueIds !== undefined) && <p className="selected-context">Quoted fee IDs: {quote.allocationPlan.selection.obligationIds === undefined ? 'All eligible fees' : quote.allocationPlan.selection.obligationIds.join(', ') || 'None'} · Quoted store IDs: {quote.allocationPlan.selection.storeIssueIds === undefined ? 'All eligible store issues' : quote.allocationPlan.selection.storeIssueIds.join(', ') || 'None'}. Retries keep this exact quote.</p>}
+      {!quote.allocations.length && <p>{BigInt(quote.projectedOutstandingMinor) === BigInt(0) ? 'No outstanding dues. This payment will become student credit.' : 'No selected dues will be paid. This amount becomes advance credit under the server policy.'}</p>}
       <PaymentAllocation lines={quote.allocations} summary={quote} />
       {mode === 'CHEQUE' && <p>Cheque allocation is provisional and recalculated at clearance.</p>}
     </section>}

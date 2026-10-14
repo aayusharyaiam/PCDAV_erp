@@ -54,7 +54,8 @@ export async function allocateCredits(tx: Prisma.TransactionClient, actor: { id:
       const applied = outstanding < credit.remainingMinor ? outstanding : credit.remainingMinor;
       if (applied > 0n) {
         await tx.feeCredit.update({ where: { id: credit.id }, data: { remainingMinor: { decrement: applied } } });
-        await tx.feeObligation.update({ where: { id: obligation.id }, data: { creditAppliedMinor: { increment: applied }, status: applied === outstanding ? 'PAID_BY_CREDIT' : 'OPEN' } });
+        await tx.feeObligation.update({ where: { id: obligation.id }, data: { creditAppliedMinor: { increment: applied }, status: applied === outstanding ? (obligation.paidMinor > 0n ? 'PAID' : 'PAID_BY_CREDIT') : 'OPEN' } });
+        await tx.feeCreditAllocation.create({ data: { schoolId, studentId, creditId: credit.id, obligationId: obligation.id, source: 'ASSESSMENT', amountMinor: applied } });
         await audit(tx, actor, 'FEE_CREDIT_ALLOCATED', 'FeeObligation', obligation.id, 'Automatic oldest-due-first allocation', undefined, { creditId: credit.id, studentId, amountMinor: applied });
         credit.remainingMinor -= applied;
         outstanding -= applied;

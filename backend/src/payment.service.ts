@@ -5,6 +5,12 @@ import { Actor } from './auth';
 import { Db, Tx, audit } from './db';
 import { asDate } from './utils';
 import { jsonSafe, minor } from './fee-utils';
+import { AllocationPlan, buildPlan, TargetType } from './payment-plan';
+import { financialDate, requireAdmin } from './finance-common';
+import { policyFor } from './finance-policy';
+import { releaseCollectionCredits, withdrawConsumedAdvance } from './credit-lineage';
+import { cashTotals } from './cash.service';
+import { assessBounce } from './bounce-assessment';
 import {
   ChequeClearDto,
   CloseCashierShiftDto,
@@ -16,31 +22,6 @@ import {
   PaymentRefundDto,
   PaymentCorrectionDto,
 } from './dto';
-
-type TargetType = 'FEE' | 'STORE';
-type AllocationLine = {
-  targetType: TargetType;
-  targetId: string;
-  reference: string;
-  description: string;
-  dueDate: string;
-  beforeOutstandingMinor: string;
-  creditAppliedMinor: string;
-  paymentAllocatedMinor: string;
-  afterOutstandingMinor: string;
-};
-type CreditApplication = { creditId: string; targetId: string; amountMinor: string };
-type AllocationPlan = {
-  amountMinor: string;
-  availableCreditMinor: string;
-  creditAppliedMinor: string;
-  paymentAllocatedMinor: string;
-  projectedOutstandingMinor: string;
-  projectedCreditMinor: string;
-  newCreditMinor: string;
-  lines: AllocationLine[];
-  creditApplications: CreditApplication[];
-};
 
 const PAYMENT_MODES = ['CASH', 'MANUAL_ELECTRONIC', 'CHEQUE'] as const;
 const PAYMENT_STATUSES = ['PENDING_CHEQUE', 'CAPTURED', 'CLEARED', 'BOUNCED', 'REVERSED', 'PARTIALLY_REFUNDED', 'REFUNDED'];
@@ -78,7 +59,8 @@ export class PaymentService {
     const amount = minor(body.amountMinor);
     return this.db.atomic(async tx => {
       await this.requireStudent(tx, actor.schoolId, body.studentId);
-      const plan = await this.buildPlan(tx, actor.schoolId, body.studentId, amount);
+      const selection = { ...(body.obligationIds !== undefined ? { obligationIds: body.obligationIds } : {}), ...(body.storeIssueIds !== undefined ? { storeIssueIds: body.storeIssueIds } : {}) };
+      const plan = await buildPlan(tx, actor.schoolId, body.studentId, amount, selection);
       const quote = await tx.paymentQuote.create({
         data: {
           schoolId: actor.schoolId,
@@ -126,8 +108,9 @@ export class PaymentService {
         if (quote.amountMinor !== received) throw new ConflictException('Payment amount does not match the quoted amount');
         const shift = await tx.cashierShift.findFirst({ where: { schoolId: actor.schoolId, cashierId: actor.id, businessDate, status: 'OPEN' } });
         if (!shift) throw new ConflictException('Open cashier shift required for this business date');
-        const plan = await this.buildPlan(tx, actor.schoolId, quote.studentId, received);
+        const plan = await buildPlan(tx, actor.schoolId, quote.studentId, received, (quote.allocationPlan as unknown as AllocationPlan).selection, 'CAPTURE');
         if (stable(plan) !== stable(quote.allocationPlan)) throw new ConflictException('Payment quote is stale; request a fresh allocation preview');
+        await financialDate(tx, businessDate);
         const now = new Date();
         const payment = await tx.payment.create({
           data: {
@@ -196,7 +179,9 @@ export class PaymentService {
       if (!shift) throw new ConflictException('Open cashier shift required to clear this cheque');
       // Pending cheques reserve no dues or credit. Recalculate at clearance and
       // retain both the original quote and the actual clearance allocation event.
-      const plan = await this.buildPlan(tx, actor.schoolId, payment.studentId, payment.receivedAmountMinor);
+      const quote = payment.quoteId ? await tx.paymentQuote.findUnique({ where: { id: payment.quoteId } }) : null;
+      const plan = await buildPlan(tx, actor.schoolId, payment.studentId, payment.receivedAmountMinor, (quote?.allocationPlan as unknown as AllocationPlan | undefined)?.selection, 'CLEARANCE');
+      await financialDate(tx, businessDate);
       const updated = await tx.payment.update({ where: { id }, data: { status: 'CLEARED', capturedAt: new Date(), captureBusinessDate: businessDate, captureShiftId: shift.id } });
       await this.applyPlan(tx, actor, id, payment.studentId, plan, 'Cheque cleared');
       await this.issueReceipt(tx, actor, updated, plan);
@@ -206,49 +191,58 @@ export class PaymentService {
     });
   }
 
-  async bounceCheque(actor: Actor, id: string, body: PaymentCorrectionDto) {
+  async bounceCheque(actor: Actor, id: string, body: PaymentCorrectionDto, transaction?: Tx) {
+    requireAdmin(actor);
     const { reason } = body;
-    return this.db.atomic(async tx => {
+    const operation = async (tx: Tx) => {
       const payment = await tx.payment.findFirst({ where: { id, schoolId: actor.schoolId, mode: 'CHEQUE' } });
       if (!payment) throw new BadRequestException('Cheque payment not found');
       if (!['PENDING_CHEQUE', 'CLEARED'].includes(payment.status)) throw new ConflictException('This cheque cannot be bounced in its current state');
       const { businessDate } = await this.correctionContext(tx, actor, payment, body);
+      await financialDate(tx, businessDate);
       if (payment.status === 'CLEARED') await this.releaseAllocations(tx, actor, payment, reason);
       const updated = await tx.payment.update({ where: { id }, data: { status: 'BOUNCED' } });
+      await assessBounce(tx, actor, payment, businessDate, reason);
       if (payment.status === 'CLEARED') await this.updateReceiptStatus(tx, actor, id, 'VOID', reason, 'CHEQUE_BOUNCED');
-      await tx.paymentEvent.create({ data: { schoolId: actor.schoolId, paymentId: id, type: 'CHEQUE_BOUNCED', amountMinor: payment.status === 'CLEARED' ? payment.receivedAmountMinor : 0n, reason, actorId: actor.id, businessDate } });
+      await tx.paymentEvent.create({ data: { schoolId: actor.schoolId, paymentId: id, type: 'CHEQUE_BOUNCED', amountMinor: payment.status === 'CLEARED' ? payment.receivedAmountMinor : 0n, reason, actorId: actor.id, businessDate, metadata: { reference: body.reference?.trim() ?? '' } } });
       await audit(tx, actor, 'CHEQUE_BOUNCED', 'Payment', id, reason, payment, updated);
       return this.paymentResult(tx, id);
-    });
+    };
+    return transaction ? operation(transaction) : this.db.atomic(operation);
   }
 
-  async reverse(actor: Actor, id: string, body: PaymentCorrectionDto) {
+  async reverse(actor: Actor, id: string, body: PaymentCorrectionDto, transaction?: Tx) {
+    requireAdmin(actor);
     const { reason } = body;
-    return this.db.atomic(async tx => {
+    const operation = async (tx: Tx) => {
       const payment = await tx.payment.findFirst({ where: { id, schoolId: actor.schoolId } });
       if (!payment) throw new BadRequestException('Payment not found');
       if (!['CAPTURED', 'CLEARED', 'PARTIALLY_REFUNDED'].includes(payment.status)) throw new ConflictException('Only captured payments can be reversed');
       const { businessDate, shiftId } = await this.correctionContext(tx, actor, payment, body);
       const refunded = await this.refundedAmount(tx, id);
       const remaining = payment.receivedAmountMinor - refunded;
+      await this.requirePayoutCash(tx, shiftId, remaining);
+      await financialDate(tx, businessDate);
       await this.releaseAllocations(tx, actor, payment, reason);
-      if (remaining > 0n) await tx.paymentRefund.create({ data: { schoolId: actor.schoolId, paymentId: id, shiftId, businessDate, amountMinor: remaining, reason, createdBy: actor.id } });
+      if (remaining > 0n) await tx.paymentRefund.create({ data: { schoolId: actor.schoolId, paymentId: id, shiftId, businessDate, amountMinor: remaining, reason, reference: body.reference?.trim() ?? '', createdBy: actor.id } });
       const updated = await tx.payment.update({ where: { id }, data: { status: 'REVERSED' } });
       await this.updateReceiptStatus(tx, actor, id, 'VOID', reason, 'PAYMENT_REVERSED');
       await tx.paymentEvent.create({ data: { schoolId: actor.schoolId, paymentId: id, type: 'PAYMENT_REVERSED', amountMinor: remaining, reason, actorId: actor.id, businessDate, metadata: { shiftId: shiftId ?? null } } });
       await audit(tx, actor, 'PAYMENT_REVERSED', 'Payment', id, reason, payment, updated);
       return this.paymentResult(tx, id);
-    });
+    };
+    return transaction ? operation(transaction) : this.db.atomic(operation);
   }
 
-  async refund(actor: Actor, id: string, body: PaymentRefundDto, idempotencyKey: string | undefined) {
+  async refund(actor: Actor, id: string, body: PaymentRefundDto, idempotencyKey: string | undefined, transaction?: Tx) {
+    requireAdmin(actor);
     requireCommandKey(idempotencyKey);
     const amount = minor(body.amountMinor);
     // Include the route target: a key cannot be reused for another payment.
     const requestHash = createHash('sha256').update(stable({ paymentId: id, body })).digest('hex');
     const where = { schoolId_actorId_idempotencyKey: { schoolId: actor.schoolId, actorId: actor.id, idempotencyKey } };
     try {
-      return await this.db.atomic(async tx => {
+      const operation = async (tx: Tx) => {
         const existing = await tx.refundCommand.findUnique({ where });
         if (existing) return refundReplay(existing, requestHash);
         const payment = await tx.payment.findFirst({ where: { id, schoolId: actor.schoolId } });
@@ -257,6 +251,8 @@ export class PaymentService {
         const { businessDate, shiftId } = await this.correctionContext(tx, actor, payment, body);
         const alreadyRefunded = await this.refundedAmount(tx, id);
         if (amount > payment.receivedAmountMinor - alreadyRefunded) throw new BadRequestException('Refund exceeds the unrefunded payment amount');
+        await this.requirePayoutCash(tx, shiftId, amount);
+        await financialDate(tx, businessDate);
         await this.releasePaymentAmount(tx, actor, payment, amount, body.reason);
         await tx.paymentRefund.create({ data: { schoolId: actor.schoolId, paymentId: id, shiftId, businessDate, amountMinor: amount, reason: body.reason, reference: body.reference?.trim() ?? '', createdBy: actor.id } });
         const totalRefunded = alreadyRefunded + amount;
@@ -267,8 +263,10 @@ export class PaymentService {
         const result = await this.paymentResult(tx, id);
         await tx.refundCommand.create({ data: { schoolId: actor.schoolId, actorId: actor.id, idempotencyKey, requestHash, paymentId: id, result: result as unknown as Prisma.InputJsonValue } });
         return result;
-      });
+      };
+      return await (transaction ? operation(transaction) : this.db.atomic(operation));
     } catch (error) {
+      if (transaction) throw error;
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         const existing = await this.db.refundCommand.findUnique({ where });
         if (existing) return refundReplay(existing, requestHash);
@@ -283,7 +281,7 @@ export class PaymentService {
       if (await tx.cashierShift.findUnique({ where: { schoolId_cashierId_businessDate: { schoolId: actor.schoolId, cashierId: actor.id, businessDate } } })) throw new ConflictException('A cashier shift already exists for this date');
       const shift = await tx.cashierShift.create({ data: { schoolId: actor.schoolId, cashierId: actor.id, businessDate, openingFloatMinor: opening } });
       await audit(tx, actor, 'CASHIER_SHIFT_OPENED', 'CashierShift', shift.id, 'Cashier shift opened', undefined, shift);
-      return jsonSafe(shift);
+      return jsonSafe({ ...shift, ...await cashTotals(tx, shift) });
     });
   }
 
@@ -300,7 +298,7 @@ export class PaymentService {
       if (variance !== 0n && body.reason.trim().length < 3) throw new BadRequestException('A reason is required for a cash variance');
       const closed = await tx.cashierShift.update({ where: { id }, data: { status: 'CLOSED', expectedCashMinor: expected, countedCashMinor: counted, varianceMinor: variance, closedAt: new Date(), closeReason: body.reason.trim() } });
       await audit(tx, actor, 'CASHIER_SHIFT_CLOSED', 'CashierShift', id, body.reason, shift, closed);
-      return jsonSafe(closed);
+      return jsonSafe({ ...closed, ...await cashTotals(tx, closed) });
     });
   }
 
@@ -309,7 +307,10 @@ export class PaymentService {
     const where: Prisma.CashierShiftWhereInput = { schoolId: actor.schoolId, ...(query.status ? { status: query.status } : {}), ...(query.businessDate ? { businessDate: asDate(query.businessDate) } : {}), ...(query.cashierId ? { cashierId: query.cashierId } : {}) };
     return this.db.atomic(async tx => {
       const [shifts, total] = await Promise.all([tx.cashierShift.findMany({ where, orderBy: [{ businessDate: 'desc' }, { openedAt: 'desc' }], skip: (query.page - 1) * query.limit, take: query.limit }), tx.cashierShift.count({ where })]);
-      const items = await Promise.all(shifts.map(async shift => ({ ...shift, expectedCashMinor: shift.status === 'OPEN' ? await this.expectedCash(tx, shift) : shift.expectedCashMinor })));
+      const items = await Promise.all(shifts.map(async shift => {
+        const totals = await cashTotals(tx, shift);
+        return { ...shift, ...totals, expectedCashMinor: shift.status === 'OPEN' ? totals.expectedCashMinor : shift.expectedCashMinor };
+      }));
       return jsonSafe({ items, total, page: query.page, limit: query.limit });
     });
   }
@@ -371,12 +372,6 @@ export class PaymentService {
     });
   }
 
-  async receiptPdfMetadata(actor: Actor, id: string) {
-    const receipt = await this.db.receipt.findFirst({ where: { id, schoolId: actor.schoolId }, select: { id: true, receiptNumber: true, issuedAt: true, pdfStatus: true, templateVersion: true } });
-    if (!receipt) throw new BadRequestException('Receipt not found');
-    return jsonSafe({ ...receipt, downloadAvailable: false, message: 'PDF rendering is not configured; use the immutable receipt snapshot and reprint metadata' });
-  }
-
   async collectionReport(actor: Actor, query: CollectionReportDto) {
     const from = query.fromDate ? asDate(query.fromDate) : undefined;
     const to = query.toDate ? asDate(query.toDate) : undefined;
@@ -433,52 +428,6 @@ export class PaymentService {
     return student;
   }
 
-  private async buildPlan(tx: Tx, schoolId: string, studentId: string, amountMinor: bigint): Promise<AllocationPlan> {
-    const [obligations, issues, credits] = await Promise.all([
-      tx.feeObligation.findMany({ where: { schoolId, studentId }, orderBy: [{ dueDate: 'asc' }, { assessedAt: 'asc' }, { id: 'asc' }] }),
-      tx.storeIssue.findMany({ where: { schoolId, studentId, status: 'OPEN' }, orderBy: [{ issuedAt: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }] }),
-      tx.feeCredit.findMany({ where: { schoolId, studentId, remainingMinor: { gt: 0n } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
-    ]);
-    const heads = await tx.feeHead.findMany({ where: { schoolId, id: { in: obligations.map(item => item.feeHeadId) } } });
-    const headNames = new Map(heads.map(head => [head.id, head.name]));
-    const targets = [
-      ...obligations.map(item => ({ targetType: 'FEE' as const, targetId: item.id, reference: `${item.periodKey}:${item.feeHeadId}`, description: `${headNames.get(item.feeHeadId) ?? 'Fee'} · ${item.periodKey}`, dueDate: item.dueDate.toISOString().slice(0, 10), createdAt: item.assessedAt, outstanding: item.amountMinor - item.creditAppliedMinor - item.paidMinor })),
-      ...issues.map(item => ({ targetType: 'STORE' as const, targetId: item.id, reference: item.issueNumber, description: `Store issue ${item.issueNumber}`, dueDate: item.issuedAt.toISOString().slice(0, 10), createdAt: item.createdAt, outstanding: item.totalMinor - item.paidMinor })),
-    ].filter(item => item.outstanding > 0n).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || (a.targetType === b.targetType ? a.createdAt.getTime() - b.createdAt.getTime() || a.targetId.localeCompare(b.targetId) : a.targetType === 'FEE' ? -1 : 1));
-    const creditApplications: CreditApplication[] = [];
-    const creditByTarget = new Map<string, bigint>();
-    const availableCredit = sum(credits.map(credit => credit.remainingMinor));
-    let remainingCredit = availableCredit;
-    for (const target of targets.filter(item => item.targetType === 'FEE')) {
-      if (remainingCredit <= 0n) break;
-      const applied = target.outstanding < remainingCredit ? target.outstanding : remainingCredit;
-      if (applied <= 0n) continue;
-      creditByTarget.set(target.targetId, applied);
-      let remainingApplication = applied;
-      for (const credit of credits) {
-        const already = creditApplications.filter(item => item.creditId === credit.id).reduce((total, item) => total + BigInt(item.amountMinor), 0n);
-        const available = credit.remainingMinor - already;
-        if (available <= 0n || remainingApplication <= 0n) continue;
-        const fromCredit = available < remainingApplication ? available : remainingApplication;
-        creditApplications.push({ creditId: credit.id, targetId: target.targetId, amountMinor: fromCredit.toString() });
-        remainingApplication -= fromCredit;
-      }
-      remainingCredit -= applied;
-    }
-    let remainingPayment = amountMinor;
-    const lines: AllocationLine[] = targets.map(target => {
-      const creditApplied = creditByTarget.get(target.targetId) ?? 0n;
-      const afterCredit = target.outstanding - creditApplied;
-      const paymentAllocated = afterCredit < remainingPayment ? afterCredit : remainingPayment;
-      remainingPayment -= paymentAllocated;
-      return { targetType: target.targetType, targetId: target.targetId, reference: target.reference, description: target.description, dueDate: target.dueDate, beforeOutstandingMinor: target.outstanding.toString(), creditAppliedMinor: creditApplied.toString(), paymentAllocatedMinor: paymentAllocated.toString(), afterOutstandingMinor: (afterCredit - paymentAllocated).toString() };
-    });
-    const creditApplied = availableCredit - remainingCredit;
-    const paymentAllocated = amountMinor - remainingPayment;
-    const outstanding = sum(targets.map(target => target.outstanding)) - creditApplied - paymentAllocated;
-    return { amountMinor: amountMinor.toString(), availableCreditMinor: availableCredit.toString(), creditAppliedMinor: creditApplied.toString(), paymentAllocatedMinor: paymentAllocated.toString(), projectedOutstandingMinor: outstanding.toString(), projectedCreditMinor: (remainingCredit + remainingPayment).toString(), newCreditMinor: remainingPayment.toString(), lines, creditApplications };
-  }
-
   private async applyPlan(tx: Tx, actor: Actor, paymentId: string, studentId: string, plan: AllocationPlan, reason: string) {
     for (const application of plan.creditApplications) {
       const credit = await tx.feeCredit.findFirst({ where: { id: application.creditId, schoolId: actor.schoolId, studentId } });
@@ -489,7 +438,8 @@ export class PaymentService {
       if (applied > obligation.amountMinor - obligation.paidMinor - obligation.creditAppliedMinor) throw new ConflictException('Credit exceeds the current outstanding fee');
       await tx.feeCredit.update({ where: { id: credit.id }, data: { remainingMinor: { decrement: applied } } });
       await tx.feeObligation.update({ where: { id: obligation.id }, data: { creditAppliedMinor: { increment: applied }, status: statusFor(obligation.amountMinor, obligation.creditAppliedMinor + applied, obligation.paidMinor) } });
-      await tx.paymentCreditApplication.create({ data: { schoolId: actor.schoolId, paymentId, creditId: credit.id, targetId: obligation.id, amountMinor: applied } });
+      const recorded = await tx.paymentCreditApplication.create({ data: { schoolId: actor.schoolId, paymentId, creditId: credit.id, targetId: obligation.id, amountMinor: applied } });
+      await tx.feeCreditAllocation.create({ data: { schoolId: actor.schoolId, studentId, creditId: credit.id, obligationId: obligation.id, paymentId, legacyApplicationId: recorded.id, source: 'PAYMENT', amountMinor: applied } });
       await audit(tx, actor, 'PAYMENT_CREDIT_APPLIED', 'FeeObligation', obligation.id, reason, undefined, { paymentId, creditId: credit.id, amountMinor: applied });
     }
     for (const line of plan.lines) {
@@ -520,12 +470,19 @@ export class PaymentService {
       tx.enrollment.findFirst({ where: { schoolId: actor.schoolId, studentId: payment.studentId, status: 'ACTIVE' }, orderBy: { startDate: 'desc' } }),
     ]);
     const classroom = enrollment ? await tx.classOffering.findFirst({ where: { id: enrollment.classId, schoolId: actor.schoolId } }) : null;
-    const sequence = await tx.receiptSequence.upsert({ where: { schoolId: actor.schoolId }, create: { schoolId: actor.schoolId, nextNumber: 2 }, update: { nextNumber: { increment: 1 } } });
+    const policy = await policyFor(tx, actor.schoolId);
+    const date = payment.captureBusinessDate ?? payment.businessDate;
+    const startYear = date.getUTCFullYear() - (date.getUTCMonth() < 3 ? 1 : 0);
+    const scopeKey = policy.receiptScope === 'SCHOOL' ? 'SCHOOL' : `FY${startYear}-${String(startYear + 1).slice(-2)}`;
+    const sequence = policy.receiptScope === 'SCHOOL'
+      ? await tx.receiptSequence.upsert({ where: { schoolId: actor.schoolId }, create: { schoolId: actor.schoolId, nextNumber: 2 }, update: { nextNumber: { increment: 1 } } })
+      : await tx.receiptSeries.upsert({ where: { schoolId_prefix_scopeKey: { schoolId: actor.schoolId, prefix: policy.receiptPrefix, scopeKey } }, create: { schoolId: actor.schoolId, prefix: policy.receiptPrefix, scopeKey, nextNumber: 2 }, update: { nextNumber: { increment: 1 } } });
     const number = sequence.nextNumber - 1;
-    const receiptNumber = `${school.admissionPrefix}/FEE/${(payment.captureBusinessDate ?? payment.businessDate).getUTCFullYear()}/${String(number).padStart(6, '0')}`;
+    const receiptNumber = `${policy.receiptPrefix}/${scopeKey}/${String(number).padStart(6, '0')}`;
     const issuedAt = new Date();
     const snapshot = {
       receiptNumber,
+      demoPolicy: { version: policy.version, receiptPrefix: policy.receiptPrefix, receiptScope: policy.receiptScope, scopeKey, financialYearStartMonth: 4, label: 'Configurable DEMO policy; not approved real school policy' },
       currency: payment.currency,
       school: { id: school.id, name: school.name, address: school.address, phone: school.phone, email: school.email },
       student: { id: student.id, admissionNumber: student.admissionNumber, name: student.name },
@@ -536,7 +493,8 @@ export class PaymentService {
       collector: { id: actor.id, name: actor.name },
       templateVersion: 'receipt-v1',
     };
-    const receipt = await tx.receipt.create({ data: { schoolId: actor.schoolId, paymentId: payment.id, studentId: payment.studentId, receiptNumber, snapshot: jsonSafe(snapshot) as Prisma.InputJsonValue, issuedAt } });
+    const receipt = await tx.receipt.create({ data: { schoolId: actor.schoolId, paymentId: payment.id, studentId: payment.studentId, receiptNumber, snapshot: jsonSafe(snapshot) as Prisma.InputJsonValue, issuedAt, pdfStatus: 'PENDING' } });
+    await tx.receiptPdfJob.create({ data: { schoolId: actor.schoolId, receiptId: receipt.id, receiptStatus: receipt.status, requestedBy: actor.id } });
     await tx.receiptEvent.create({ data: { schoolId: actor.schoolId, receiptId: receipt.id, type: 'ISSUED', actorId: actor.id, metadata: { receiptNumber, pdfStatus: receipt.pdfStatus, templateVersion: receipt.templateVersion } } });
     return receipt;
   }
@@ -560,13 +518,13 @@ export class PaymentService {
 
   private async releasePaymentAmount(tx: Tx, actor: Actor, payment: { id: string; studentId: string }, amount: bigint, reason: string) {
     let remaining = amount;
-    // Refund unused advance first; only then reopen settled obligations. Never
-    // withdraw credit already spent by a later payment or Level 3 assessment.
+    // Unused advance first, then traced consumed advance and direct allocations.
     const credit = await tx.feeCredit.findFirst({ where: { schoolId: actor.schoolId, studentId: payment.studentId, sourcePaymentId: payment.id } });
     if (credit) {
       const withdrawn = credit.remainingMinor < remaining ? credit.remainingMinor : remaining;
       if (withdrawn > 0n) await tx.feeCredit.update({ where: { id: credit.id }, data: { remainingMinor: { decrement: withdrawn } } });
       remaining -= withdrawn;
+      if (remaining > 0n) remaining = await withdrawConsumedAdvance(tx, actor, credit.id, payment.id, remaining, reason);
     }
     const allocations = await tx.paymentAllocation.findMany({ where: { paymentId: payment.id }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
     for (const allocation of allocations) {
@@ -579,29 +537,13 @@ export class PaymentService {
       await tx.paymentAllocationRelease.create({ data: { schoolId: actor.schoolId, paymentId: payment.id, allocationId: allocation.id, amountMinor: amountToRelease, reason, createdBy: actor.id } });
       remaining -= amountToRelease;
     }
-    if (remaining > 0n) throw new ConflictException('Payment credit has already been used; resolve its later allocations before refunding or reversing this amount');
+    if (remaining > 0n) throw new ConflictException('Historical credit use lacks sufficient traced allocations; reconcile its evidenced lineage before correction');
   }
 
   private async releaseAllocations(tx: Tx, actor: Actor, payment: Payment, reason: string) {
     const remaining = payment.receivedAmountMinor - await this.refundedAmount(tx, payment.id);
     await this.releasePaymentAmount(tx, actor, payment, remaining, reason);
-    await this.releaseCreditApplications(tx, actor, payment, reason);
-  }
-
-  private async releaseCreditApplications(tx: Tx, actor: Actor, payment: { id: string; studentId: string }, reason: string) {
-    const applications = await tx.paymentCreditApplication.findMany({ where: { paymentId: payment.id }, orderBy: { createdAt: 'asc' } });
-    for (const application of applications) {
-      const released = (await tx.paymentCreditRelease.findMany({ where: { applicationId: application.id } })).reduce((total, item) => total + item.amountMinor, 0n);
-      const active = application.amountMinor - released;
-      if (active <= 0n) continue;
-      const credit = await tx.feeCredit.findFirst({ where: { id: application.creditId, schoolId: actor.schoolId, studentId: payment.studentId } });
-      const obligation = await tx.feeObligation.findFirst({ where: { id: application.targetId, schoolId: actor.schoolId, studentId: payment.studentId } });
-      if (!credit || !obligation || obligation.creditAppliedMinor < active) throw new ConflictException('Credit application history is inconsistent');
-      await tx.feeCredit.update({ where: { id: credit.id }, data: { remainingMinor: { increment: active } } });
-      await tx.feeObligation.update({ where: { id: obligation.id }, data: { creditAppliedMinor: { decrement: active, }, status: statusFor(obligation.amountMinor, obligation.creditAppliedMinor - active, obligation.paidMinor) } });
-      await tx.paymentCreditRelease.create({ data: { schoolId: actor.schoolId, paymentId: payment.id, applicationId: application.id, amountMinor: active, reason, createdBy: actor.id } });
-      await audit(tx, actor, 'PAYMENT_CREDIT_RELEASED', 'FeeObligation', obligation.id, reason, undefined, { paymentId: payment.id, creditId: credit.id, amountMinor: active });
-    }
+    await releaseCollectionCredits(tx, actor, payment.id, reason);
   }
 
   private async releaseTarget(tx: Tx, actor: Actor, studentId: string, targetType: TargetType, targetId: string, amount: bigint) {
@@ -617,12 +559,16 @@ export class PaymentService {
   }
 
   private async expectedCash(tx: Tx, shift: { id: string; openingFloatMinor: bigint }) {
-    const payments = await tx.payment.findMany({ where: { shiftId: shift.id, mode: 'CASH', status: { in: ['CAPTURED', 'PARTIALLY_REFUNDED', 'REFUNDED', 'REVERSED'] } } });
-    const refunds = await tx.paymentRefund.findMany({ where: { shiftId: shift.id } });
-    return shift.openingFloatMinor + sum(payments.map(payment => payment.receivedAmountMinor)) - sum(refunds.map(refund => refund.amountMinor));
+    return (await cashTotals(tx, shift)).expectedCashMinor;
   }
 
-  private async correctionContext(tx: Tx, actor: Actor, payment: Payment, body: PaymentCorrectionDto) {
+  private async requirePayoutCash(tx: Tx, shiftId: string | undefined, amount: bigint) {
+    if (!shiftId) return;
+    const shift = await tx.cashierShift.findUniqueOrThrow({ where: { id: shiftId } });
+    if (amount > (await cashTotals(tx, shift)).expectedCashMinor) throw new ConflictException('Correction exceeds available payout cash');
+  }
+
+  async correctionContext(tx: Tx, actor: Actor, payment: Payment, body: PaymentCorrectionDto) {
     const requestedDate = body.businessDate ? asDate(body.businessDate) : undefined;
     const earliest = payment.captureBusinessDate ?? payment.businessDate;
     if (payment.mode !== 'CASH') {
@@ -644,9 +590,12 @@ export class PaymentService {
 
   private async updateReceiptStatus(tx: Tx, actor: Actor, paymentId: string, status: string, reason: string, eventType: string) {
     if (!RECEIPT_STATUSES.includes(status)) return;
-    await tx.receipt.updateMany({ where: { schoolId: actor.schoolId, paymentId }, data: { status } });
+    await tx.receipt.updateMany({ where: { schoolId: actor.schoolId, paymentId }, data: { status, pdfStatus: 'PENDING' } });
     const receipt = await tx.receipt.findUnique({ where: { paymentId } });
-    if (receipt) await tx.receiptEvent.create({ data: { schoolId: actor.schoolId, receiptId: receipt.id, type: status === 'VOID' ? 'VOIDED' : status, actorId: actor.id, metadata: { reason, source: eventType } } });
+    if (receipt) {
+      await tx.receiptEvent.create({ data: { schoolId: actor.schoolId, receiptId: receipt.id, type: status === 'VOID' ? 'VOIDED' : status, actorId: actor.id, metadata: { reason, source: eventType } } });
+      await tx.receiptPdfJob.upsert({ where: { receiptId_receiptStatus: { receiptId: receipt.id, receiptStatus: status } }, create: { schoolId: actor.schoolId, receiptId: receipt.id, receiptStatus: status, requestedBy: actor.id }, update: { status: 'PENDING', content: null, sha256: null, errorCode: null, requestedBy: actor.id } });
+    }
   }
 
   private reprintMetadata(receipt: { id: string; receiptNumber: string; issuedAt: Date; pdfStatus: string; templateVersion: string }) {

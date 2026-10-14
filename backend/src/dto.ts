@@ -309,6 +309,8 @@ export class StoreStockAdjustmentDto {
 export class PaymentQuoteDto {
   @IsString() @Length(1, 100) studentId!: string;
   @Matches(/^\d{1,19}$/) amountMinor!: string;
+  @ValidateIf((_body, value) => value !== undefined) @IsArray() @ArrayMaxSize(500) @IsString({ each: true }) obligationIds?: string[];
+  @ValidateIf((_body, value) => value !== undefined) @IsArray() @ArrayMaxSize(500) @IsString({ each: true }) storeIssueIds?: string[];
 }
 
 export class PaymentDto {
@@ -338,11 +340,11 @@ export class PaymentActionDto {
 export class PaymentCorrectionDto extends PaymentActionDto {
   @IsOptional() @IsDateString({ strict: true }) businessDate?: string;
   @IsOptional() @IsString() @Length(1, 100) shiftId?: string;
+  @IsOptional() @IsString() @MaxLength(150) reference?: string;
 }
 
 export class PaymentRefundDto extends PaymentCorrectionDto {
   @Matches(/^\d{1,19}$/) amountMinor!: string;
-  @IsOptional() @IsString() @MaxLength(150) reference?: string;
 }
 
 export class ChequeClearDto extends PaymentActionDto {

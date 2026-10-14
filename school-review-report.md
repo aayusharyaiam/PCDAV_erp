@@ -2,7 +2,7 @@
 ## Management Overview and Approval Guide
 
 **For:** Principal, school management, office team, admissions team, accountant, and department heads
-**Updated:** 13 October 2026 — version 0.4
+**Updated:** 14 October 2026 — version 0.5
 **Purpose:** explain in simple language what the new website does, what staff will be able to do, what is still being built, and what the school must approve.
 
 > **Important:** This is a staging/prototype implementation using test data. It is not ready to accept real school payments yet.
@@ -28,10 +28,10 @@ The current prototype already covers:
 - Hostel and transport fee/service assignments.
 - Transport routes, vehicles, drivers, student allocation, capacity checks, and reports.
 - Store groups, clusters, vendors, products, stock, student issues, and store balances.
-- Trial payment collection, fee/store settlement, receipt snapshots and cashier cash close.
+- Synthetic payment collection, selected fee/store settlement, receipt snapshots/PDF jobs, correction approval, reports/statements and cashier cash close.
 - Audit history and responsive desktop/mobile screens.
 
-The core payment journey now works with synthetic test data. Remaining work includes the Accountant-to-Admin approval process, downloadable receipt PDFs, complete financial journal and credit history, cash handovers/deposits, full reconciliation and approved school rules. The school must not use the prototype to record real money until those controls are completed and approved.
+The Level 4 demo journey now works with synthetic test data, including Accountant requests/Admin decisions, cash movements, reports/statements, balanced journal checks and current-status receipt PDF jobs. Production work still includes school policy approval, external bank/refund settlement, printer/font approval, private object storage, backups/restore, UAT and live migration. The school must not use the demo to record real money.
 
 ---
 
@@ -50,9 +50,10 @@ The core payment journey now works with synthetic test data. Remaining work incl
 | Hostel/transport services | Assign dated hostel or generic service charges | Working in prototype |
 | Transport management | Manage routes, vehicles, drivers, dated allocation, capacity, and operational lists | Working in prototype |
 | Store management | Manage groups, clusters, vendors, products, stock receipts, student issues, and defaulters | Working in prototype |
-| Collect payment | Preview allocation, record test cash/verified manual electronic payments or pending cheques, leave partial dues or student credit | Working in staging only |
-| Receipts and corrections | View original receipt snapshots, record browser reprints, clear cheques; Admin can reverse/refund/bounce | Working in staging; PDFs and approval requests pending |
-| Cashier shifts | Open a shift, compare expected/count cash, record variance and close | Basic close working; handovers/deposits and full reconciliation pending |
+| Collect payment | Preview automatic or selected allocation, record test cash/verified manual electronic payments or pending cheques, leave partial dues or student credit | Working in synthetic staging only |
+| Receipts and corrections | View original receipt snapshots, record browser reprints, request/decide corrections, clear cheques, check/download/retry current-status PDFs | Working in synthetic staging; production printer/storage/settlement approval pending |
+| Cashier shifts | Open a shift, record deposits/handovers/Admin expenses, compare expected/count cash, record variance and close | Working in synthetic staging; production reconciliation approval pending |
+| Finance policy/reports | Review demo policy, view statements, dues, collection and journal reports | Working in synthetic staging; school report definitions pending |
 | Attendance | Teacher day-wise attendance and Admin corrections | Planned |
 | Promotion/leaving | Teacher Promote/Retain, Admin batch promotion, withdrawal, TC/SLC | Planned |
 | Migration/reports | Import approved live data and complete management reports | Planned after approval |
@@ -72,13 +73,13 @@ The core payment journey now works with synthetic test data. Remaining work incl
 - Runs school operations.
 - Creates and manages Admin, Accountant, and Teacher accounts within the rules.
 - Manages admissions, students, classes, fee plans, services, transport, and store operations.
-- Can make reasoned, audited financial corrections in staging. The formal request/approval inbox is still to be built.
+- Decides reasoned, audited financial correction requests in the synthetic demo. Production authority and policy still require school approval.
 
 ### Accountant
 
 - Views fee plans, assessments, ledgers, outstanding balances, credit, transport/hostel charges, and store balances.
-- Can demonstrate test payment collection, receipt/reprint, cheque clearance and basic cashier close now.
-- Cannot directly refund, reverse or bounce payments; those actions are Admin/Superadmin-only. The Accountant request and Admin approval workflow remains unfinished.
+- Can demonstrate test payment collection, receipt/reprint, cheque clearance, correction requests, statements/reports and cashier movements now.
+- Cannot directly refund, reverse or bounce payments; those actions require the Admin/Superadmin decision workflow. The demo approval is implemented; production authority remains unfinished.
 - Cannot change fee rules, transport masters, store stock, or staff permissions in the current role model.
 
 ### Teacher
@@ -122,11 +123,11 @@ This journey is now available for staging review at Collect payment. Open a cash
 - Student credit, if any.
 - Payment mode and reference.
 
-Cash tendered and change are separate from the amount posted. Manual electronic entries require the staff member to confirm receipt of funds and record evidence; the system is not connected to a bank or payment gateway. A pending cheque has no final receipt or settled allocation until clearance.
+Cash tendered and change are separate from the amount posted. Manual electronic entries require the staff member to confirm receipt of funds and record evidence; the system is not connected to a bank or payment gateway. A pending cheque has no final receipt or settled allocation until clearance. The demo also supports deposits, handovers, Admin expenses, statements, journal/collection/dues reports, correction requests/decisions, and current-status PDF job status/download/retry.
 
-The server protects against duplicate payment commands, duplicate electronic references, over-allocation and stale quotes. If a response is lost, staff retry the same saved command, not a new collection. Original receipt data is retained even if the student name later changes. Browser reprinting records a reason and does not collect money again. Receipt PDF downloads are not implemented.
+The server protects against duplicate payment commands, duplicate electronic references, over-allocation, stale quotes/policy and stale approvals. If a response is lost, staff retry the same saved command, not a new collection. Original receipt data is retained even if the student name later changes. Browser reprinting records a reason and does not collect money again. Receipt PDFs are generated through a durable demo job; a failed or pending job never changes the payment.
 
-The screen currently chooses allocation order automatically; selecting individual obligations or overriding school rules is not available. Full concession/fine rules and production receipt numbering still require implementation and approval.
+The screen supports automatic or explicitly selected fee/store obligations in the demo. Full concession/fine rules, external settlement, production receipt numbering, approved fonts/printers and school policy still require approval.
 
 ---
 
@@ -278,23 +279,23 @@ The store workspace shows:
 |---|---|
 | Login, role boundaries, admissions, enrollment, academic setup | Staff UAT, operational approval and production access review |
 | Student registry, Student 360, fee plans and assessment | Approved rates, concessions/fines, eligibility and old-session policies |
-| Fee/store partial collection, credit, verified manual electronic payments | Full financial journal, credit-use history/recovery and bank reconciliation |
+| Fee/store partial/selected collection, credit, verified manual electronic payments | Production financial policy, external bank/refund settlement and school-approved reconciliation |
 | Pending/cleared/bounced test cheques | Approved cheque/bounce-charge process and settlement checks |
-| Receipt snapshots, browser reprints, Admin reversals and refunds | Accountant request/Admin approval, approved numbering, generated PDFs and printer validation |
-| Cashier opening float, counted cash and variance close | Deposits/handovers/other cash movements and full reconciliation |
+| Receipt snapshots, browser reprints, correction approval and demo PDF jobs | Approved numbering, fonts/printer, object storage/worker and external settlement |
+| Cashier opening float, movements, counted cash and variance close | Production reconciliation, backups/recovery and school acceptance |
 | Hostel/transport charges and transport allocation | Approved live service data and charge/cutoff policies |
 | Store inventory, issues and shared balance settlement | Live store import, store-specific reports and approved receipt policy |
 | Synthetic automated workflows | Attendance/promotion/leaving release, migration, backups and cutover sign-off |
 
 The website can be demonstrated with synthetic data. Do not import the live school database or collect real money until the school signs off the remaining controls.
 
-### What was checked on 13 October 2026
+### What was checked on 14 October 2026
 
-- 26 backend/database tests passed, covering the student/fee foundations and payment security, retries, refunds, cheque states, exact amounts and cashier-close boundaries.
-- 23 browser tests passed against controlled simulated API responses, checking the real screens and request formats.
-- One additional live browser test passed against the local API and PostgreSQL: a synthetic Accountant opened a shift, collected a partial cash payment, settled a store issue, reopened the original receipt after a student-name change, recorded a reprint and closed with the correct cash total.
-- Both application builds and database migration/schema checks passed.
-- These are developer checks, not school UAT or approval of financial policies. Receipt PDFs, physical printer output, the complete financial journal, standalone lint setup and production recovery remain outstanding.
+- 76 backend/database tests passed across seven suites, covering payment security, retries, refunds/corrections, cheque states, exact amounts, approvals, cash movements, journal/credit lineage, immutable history, reports/statements and PDF jobs.
+- 33 browser tests passed against controlled simulated API responses, checking the real Level 4 screens and request formats.
+- One additional live browser test passed against the local API and PostgreSQL: a synthetic Accountant opened a shift, collected cash, recorded a movement, submitted a correction, an Admin approved it, reports/statements were checked, the receipt PDF path was exercised, and the shift was closed. Immutable synthetic history was retained and fixture accounts disabled.
+- Both application builds, TypeScript checks and 13-migration schema checks passed.
+- These are developer checks, not school UAT or approval of financial policies. Physical printer/font output, external settlement, object-storage/worker productionization, standalone lint setup and production recovery remain outstanding.
 
 ---
 
@@ -347,8 +348,8 @@ Please mark each item as **Approved**, **Change required**, or **Need discussion
 ## 10. Simple next steps
 
 1. **Management review:** confirm the decisions in section 9.
-2. **Staging demonstration:** staff test admission, student search, fee-plan preview, transport allocation, store issues, payment quotes, partial/advance payments, original receipts, cheque handling and basic cash close using sample data.
-3. **Finish payment controls:** first add the Accountant request/Admin approval workflow; then complete journal/credit history, cash movements, PDF generation, reports and approved financial policies. Existing collection and receipt screens are not a substitute for these controls.
+2. **Staging demonstration:** staff test admission, student search, fee-plan preview, transport allocation, store issues, policy, payment quotes, partial/selected/advance payments, original receipts, correction decisions, statements, reports, PDF status/download, cheque handling and cash movements using sample data.
+3. **Production gates:** approve the financial policy, receipt series/fonts/printer, external settlement, object storage/worker, report definitions, backups/recovery and UAT. Existing demo screens are not approval to collect real money.
 4. **Data preparation:** receive an authorised export and reconcile counts and balances.
 5. **User acceptance testing:** accountant, admissions operator, Admin, Teacher, and management test their own journeys.
 6. **Go-live rehearsal:** test backup restore, final import, printer output, permissions, and support process.
@@ -374,6 +375,6 @@ The management team does not need to read these documents line by line. They are
 
 ## Final recommendation
 
-Approve the direction for staging demonstration, not production payment use yet. The prototype now includes student/enrollment and fee foundations, transport/store operations, and a tested payment-to-receipt/basic-close journey. The next implementation task is the Accountant-to-Admin correction approval workflow. The next release gate also requires complete journal/credit history, cash movements, PDFs, reconciliation and the school decisions above. No live records or real collections were used for the local automated verification.
+Approve the direction for synthetic staging demonstration, not production payment use yet. The prototype now includes student/enrollment and fee foundations, transport/store operations, and tested payment-to-receipt, approval, journal, cash-movement, report, PDF and close journeys. The next release gate requires the school decisions, external settlement, printer/storage/worker approval, UAT, recovery and migration controls above. No live records or real collections were used for the local automated verification.
 
-**Report status:** Simplified management overview — ready for comments and staging review.
+**Report status:** Simplified management overview — ready for comments, Render demo review and school UAT planning.
