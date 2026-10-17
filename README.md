@@ -33,13 +33,15 @@ make test
 
 ## Implementation status
 
-Levels 1–3, transport/store operational management, and the synthetic-data Level 4 demo controls are implemented in separate application folders:
+Levels 1–4, transport/store operational management, and the academic lifecycle workflows are implemented in separate application folders:
 
 - `backend/` — NestJS API, Prisma migrations, and PostgreSQL persistence.
 - `frontend/` — Next.js/React staff application.
 - `PROGRESS.md` — resume instructions, completed work, remaining work, and the next milestone.
 - `backend/README.md` and `frontend/README.md` — application-specific local setup, features, tests, and deployment notes.
 - `DEPLOYMENT.md` — beginner-friendly Render deployment and synthetic-data verification steps.
+
+The academic lifecycle workspace includes Teacher attendance, Admin/Superadmin attendance-correction review, Teacher Promote/Retain decisions, and Admin/Superadmin next-session promotion execution.
 
 Run the local applications with:
 

@@ -124,12 +124,133 @@ model TeacherAssignment {
   @@index([schoolId, teacherId, sessionId])
 }
 
+model AttendanceSubmission {
+  id             String   @id @default(uuid())
+  schoolId       String
+  sessionId      String
+  classId        String
+  attendanceDate DateTime @db.Date
+  markedBy       String
+  submittedAt    DateTime @default(now())
+  status         String   @default("SUBMITTED")
+
+  @@unique([schoolId, sessionId, classId, attendanceDate], map: "AttendanceSubmission_scope_unique")
+  @@unique([id, schoolId], map: "AttendanceSubmission_id_school_unique")
+  @@index([schoolId, sessionId, classId, attendanceDate], map: "AttendanceSubmission_scope_idx")
+}
+
+model AttendanceMark {
+  id           String   @id @default(uuid())
+  schoolId     String
+  submissionId String
+  studentId    String
+  enrollmentId String
+  status       String
+  createdAt    DateTime @default(now())
+
+  @@unique([id, schoolId], map: "AttendanceMark_id_school_unique")
+  @@unique([submissionId, studentId], map: "AttendanceMark_submission_student_unique")
+  @@index([schoolId, studentId, createdAt], map: "AttendanceMark_student_created_idx")
+  @@index([schoolId, enrollmentId], map: "AttendanceMark_enrollment_idx")
+}
+
+model AttendanceCorrectionRequest {
+  id                 String   @id @default(uuid())
+  schoolId           String
+  attendanceMarkId   String
+  requestedBy        String
+  beforeStatus       String
+  requestedStatus    String
+  beforeCorrectionId String?
+  reason             String
+  status             String   @default("REQUESTED")
+  version            Int      @default(1)
+  requestedAt        DateTime @default(now())
+  decidedBy          String?
+  decidedAt          DateTime?
+  decisionReason     String?
+
+  @@unique([id, schoolId], map: "AttendanceCorrectionRequest_id_school_unique")
+  @@index([schoolId, status, requestedAt], map: "AttendanceCorrectionRequest_status_idx")
+  @@index([schoolId, attendanceMarkId, requestedAt], map: "AttendanceCorrectionRequest_mark_idx")
+}
+
+model AttendanceCorrection {
+  id             String   @id @default(uuid())
+  schoolId       String
+  attendanceMarkId String
+  requestId      String   @unique
+  originalStatus String
+  correctedStatus String
+  appliedBy      String
+  reason         String
+  appliedAt      DateTime @default(now())
+
+  @@unique([id, schoolId], map: "AttendanceCorrection_id_school_unique")
+  @@index([schoolId, attendanceMarkId, appliedAt], map: "AttendanceCorrection_mark_idx")
+}
+
+model PromotionDecision {
+  id                String   @id @default(uuid())
+  schoolId          String
+  sourceSessionId   String
+  sourceEnrollmentId String
+  studentId         String
+  sourceClassId     String
+  decision          String
+  decidedBy         String
+  reason            String
+  decidedAt         DateTime @default(now())
+
+  @@unique([schoolId, sourceEnrollmentId], map: "PromotionDecision_source_unique")
+  @@unique([id, schoolId], map: "PromotionDecision_id_school_unique")
+  @@index([schoolId, sourceSessionId, sourceClassId, decision], map: "PromotionDecision_scope_idx")
+}
+
+model PromotionBatch {
+  id             String   @id @default(uuid())
+  schoolId       String
+  sourceSessionId String
+  targetSessionId String
+  status         String   @default("DRAFT")
+  version        Int      @default(1)
+  createdBy      String
+  validation     Json?
+  createdAt      DateTime @default(now())
+  validatedAt    DateTime?
+  executedAt     DateTime?
+
+  @@unique([id, schoolId], map: "PromotionBatch_id_school_unique")
+  @@index([schoolId, sourceSessionId, targetSessionId, status], map: "PromotionBatch_scope_idx")
+}
+
+model PromotionBatchItem {
+  id                String   @id @default(uuid())
+  schoolId          String
+  batchId           String
+  sourceEnrollmentId String
+  decisionId        String
+  studentId         String
+  decision          String
+  targetClassId     String
+  status            String   @default("PENDING")
+  targetEnrollmentId String?
+  error              String?
+  createdAt         DateTime @default(now())
+  executedAt        DateTime?
+
+  @@unique([batchId, sourceEnrollmentId], map: "PromotionBatchItem_source_unique")
+  @@unique([id, schoolId], map: "PromotionBatchItem_id_school_unique")
+  @@index([schoolId, batchId, status], map: "PromotionBatchItem_batch_status_idx")
+  @@index([schoolId, studentId], map: "PromotionBatchItem_student_idx")
+}
+
 model Family {
   id       String @id @default(uuid())
   schoolId String
   label    String
 
-  @@unique([id, schoolId])
+  @@unique([id, schoolId], map: "Enrollment_id_school_unique")
 }
 
 model Guardian {
@@ -211,6 +332,7 @@ model Enrollment {
   endDate     DateTime? @db.Date
 
   @@unique([schoolId, studentId, sessionId])
+  @@unique([id, schoolId])
   @@index([schoolId, sessionId, classId, status])
 }
 

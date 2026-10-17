@@ -1,10 +1,10 @@
 # PCDAV ERP implementation progress
 
-**Last updated:** 14 October 2026
+**Last updated:** 17 October 2026
 **Documentation revision:** 0.5 — synchronized with the complete demo Level 4 controls and Render deployment guidance
 **Application revisions:** `29d4c44` baseline; current Level 4 completion changes are pending commit/push in this session
 **Current branch:** `main`
-**Current milestone:** Level 4 demo controls complete and locally verified; Render synthetic-data deployment is next
+**Current milestone:** Attendance, correction approval and Promote/Retain lifecycle workflows implemented; Render synthetic-data deployment is active
 
 ## How to resume this project
 
@@ -35,6 +35,9 @@
 - Store management: group/cluster/vendor/product masters, stock receipts, atomic stock movements, low-stock visibility, student item issues, auditable cancellation/stock restoration, and outstanding student issue/defaulter lists.
 - Level 4 demo backend: server quotes with selected fee/store targets, atomic/idempotent payment capture, explicit allocation and credit lineage, partial balances, same-student overpayment credit, cash tender/change, verified manual electronic payments, pending/cleared/bounced cheques, configurable demo policy, immutable receipt snapshots, audited reprints, correction requests/Admin decisions, cash deposits/handovers/expenses, balanced journal, statements, dues/collection/journal reports, and cashier close.
 - Level 4 demo frontend: `/fees/collect`, `/receipts`, `/cashier`, `/finance/requests`, `/finance/policy`, `/reports`, and `/statements`, connected to actual API contracts. Store issues settle through selected/automatic payment allocation; stock receipts remain separate inventory records.
+- Academic lifecycle: assigned Teachers can submit daily attendance for every active student, submit immutable correction requests, and record final Promote/Retain decisions. Admin/Superadmin can review correction requests and prepare, validate, and execute capacity-checked next-session promotion batches while preserving enrollment history.
+- Superadmin account management: Superadmin can provision Admin, Accountant and Teacher accounts, reset/deactivate lower accounts, and cannot create or promote another Superadmin.
+- Frontend academic workspace: responsive Attendance, Correction review and Promote/Retain screens with retry-safe writes, loading/error/empty states, keyboard focus states, animations and reduced-motion support.
 - Receipt PDF jobs now run durably inside the API for the small synthetic demo, store private bytes in PostgreSQL, support lease/retry/status/download, and render the current receipt status. Unsupported Devanagari/combining text is rejected rather than corrupted; physical printer approval remains open.
 - Safety checks include stale quote/policy/selection rejection, concurrent settlement/approval/refund/deposit limits, receipt/journal/PDF rollback, append-only financial history, credit lineage, duplicate electronic-reference prevention, verification evidence, and frozen command/key recovery after ambiguous responses.
 - Existing Level 3/transport/store changes were preserved and combined with the recovered Level 4 demo implementation. The documentation refresh covers the project Markdown files, the coordination contract at `backend/LEVEL4-CONTRACT.md`, deployment guidance at `DEPLOYMENT.md`, and the generated management Word report without modifying historical legacy observations.
@@ -43,7 +46,7 @@
 
 - `backend` TypeScript/NestJS build passes.
 - `frontend` Next.js production build passes.
-- Prisma schema validation and 13-migration deployment pass against temporary local PostgreSQL 18. The seed passed in the earlier Level 3 verification; production/demo seed instructions are now documented separately.
+- Prisma schema validation passes for the 14-migration deployment path. The latest migration adds attendance, correction approval and Promote/Retain lifecycle records; deployment against a live disposable PostgreSQL database remains to be rerun.
 - `npm test -- --runInBand` passes: 76 tests across seven backend suites. Financial tests cover capture/refund retries, approval/cash races, selected dues, configurable policy, journal/credit lineage, append-only guards, statements/reports, PDF generation/retry/status and existing workflows.
 - `/health` responds with `{ "status": "ok" }` when API and database are ready.
 - Frontend and backend production builds pass for the current staging implementation.
@@ -70,12 +73,10 @@
 - Devanagari-capable/office-approved receipt fonts and physical printer approval
 - Production object storage for documents, managed worker separation, backups/restore and deployment monitoring
 - Full statutory/management report acceptance and school UAT
-- Teacher day-wise attendance and Admin-approved corrections
-- Teacher final Promote/Retain workflow
 - Transport import/migration of the live school's route and student allocation master data
 - Store import/migration of the live school's products, quantities, vendors, and historical student balances
 - Store-specific financial reports/print formats (shared payment capture, receipt snapshots and void/refund history are now implemented)
-- Reports, certificates, withdrawal, promotion batch execution, and migration
+- Reports, certificates, withdrawal, and live-data migration
 - Background worker for future financial/document jobs
 
 ## Next milestone

@@ -16,7 +16,7 @@ export class UsersController {
   }
   @Post()
   async create(@CurrentUser() actor: Actor, @Body() body: CreateUserDto) {
-    if (body.role === Role.SUPERADMIN || (actor.role === Role.SUPERADMIN && body.role !== Role.ADMIN)) throw new ForbiddenException('Superadmin provisions Admin accounts; Admin provisions lower roles');
+    if (body.role === Role.SUPERADMIN) throw new ForbiddenException('Creating another Superadmin is not permitted');
     const passwordHash = await argon2.hash(body.password);
     return this.db.atomic(async tx => {
       const user = await tx.user.create({ data: { schoolId: actor.schoolId, name: body.name.trim(), email: body.email.toLowerCase().trim(), passwordHash, role: body.role } });
@@ -32,7 +32,8 @@ export class UsersController {
       if (!user) throw new NotFoundException('Account not found');
       if (user.role === Role.SUPERADMIN || user.id === actor.id || (user.role === Role.ADMIN && actor.role !== Role.SUPERADMIN)) throw new ForbiddenException('Only Superadmin manages Admin accounts; self-role edits are not allowed');
       if (user.version !== body.version) throw new ConflictException('Account changed. Reload before saving.');
-      if (body.role && (user.role === Role.ADMIN || ![Role.TEACHER, Role.ACCOUNTANT].includes(body.role as 'TEACHER' | 'ACCOUNTANT'))) throw new ForbiddenException('Only Accountant ↔ Teacher role changes are allowed');
+      if (body.role === Role.SUPERADMIN) throw new ForbiddenException('Promoting an account to Superadmin is not permitted');
+      if (body.role && actor.role !== Role.SUPERADMIN && (user.role === Role.ADMIN || ![Role.TEACHER, Role.ACCOUNTANT].includes(body.role as 'TEACHER' | 'ACCOUNTANT'))) throw new ForbiddenException('Only Accountant ↔ Teacher role changes are allowed');
       const changed = await tx.user.update({ where: { id }, data: { name: body.name?.trim(), active: body.active, role: body.role, passwordHash, ...(passwordHash ? { mustChangePassword: true } : {}), version: { increment: 1 } } });
       await tx.loginSession.deleteMany({ where: { userId: id } });
       if (body.active === false || (body.role && body.role !== Role.TEACHER)) {

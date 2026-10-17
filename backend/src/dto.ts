@@ -148,6 +148,63 @@ export class ListDto {
   @IsOptional() @IsDateString({ strict: true }) followUpBefore?: string;
 }
 
+export class AttendanceMarkDto {
+  @IsString() @Length(1, 100) studentId!: string;
+  @IsIn(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED']) status!: string;
+}
+
+export class AttendanceDto {
+  @IsString() @Length(1, 100) sessionId!: string;
+  @IsString() @Length(1, 100) classId!: string;
+  @IsDateString({ strict: true }) attendanceDate!: string;
+  @IsArray() @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => AttendanceMarkDto) marks!: AttendanceMarkDto[];
+}
+
+export class AttendanceQueryDto {
+  @IsOptional() @IsString() sessionId?: string;
+  @IsOptional() @IsString() classId?: string;
+  @IsOptional() @IsDateString({ strict: true }) attendanceDate?: string;
+  @IsOptional() @IsIn(['REQUESTED', 'APPROVED', 'REJECTED', 'STALE']) status?: string;
+}
+
+export class AttendanceCorrectionDto {
+  @IsIn(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED']) requestedStatus!: string;
+  @IsString() @Length(3, 500) reason!: string;
+}
+
+export class AttendanceCorrectionDecisionDto {
+  @IsInt() @Min(1) version!: number;
+  @IsString() @Length(3, 500) reason!: string;
+}
+
+export class PromotionDecisionInputDto {
+  @IsString() @Length(1, 100) enrollmentId!: string;
+  @IsIn(['PROMOTE', 'RETAIN']) decision!: string;
+  @IsString() @Length(3, 500) reason!: string;
+}
+
+export class PromotionDecisionDto {
+  @IsString() @Length(1, 100) sourceSessionId!: string;
+  @IsString() @Length(1, 100) classId!: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => PromotionDecisionInputDto) decisions!: PromotionDecisionInputDto[];
+}
+
+export class PromotionBatchItemDto {
+  @IsString() @Length(1, 100) sourceEnrollmentId!: string;
+  @IsString() @Length(1, 100) targetClassId!: string;
+}
+
+export class PromotionBatchDto {
+  @IsString() @Length(1, 100) sourceSessionId!: string;
+  @IsString() @Length(1, 100) targetSessionId!: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(2000) @ValidateNested({ each: true }) @Type(() => PromotionBatchItemDto) items!: PromotionBatchItemDto[];
+}
+
+export class PromotionBatchActionDto {
+  @IsInt() @Min(1) version!: number;
+  @IsString() @Length(3, 500) reason!: string;
+}
+
 export class FeeHeadDto {
   @Matches(/^[A-Z0-9_-]{2,30}$/) code!: string;
   @IsString() @Length(2, 100) name!: string;

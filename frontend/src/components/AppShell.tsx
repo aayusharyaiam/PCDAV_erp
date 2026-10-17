@@ -10,6 +10,9 @@ const links = [
   { href: '/applications', label: 'Admissions', icon: '↗', roles: ['SUPERADMIN', 'ADMIN'] },
   { href: '/students', label: 'Students', icon: '◉', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER'] },
   { href: '/academic', label: 'Academic setup', icon: '▦', roles: ['SUPERADMIN', 'ADMIN', 'TEACHER'] },
+  { href: '/attendance', label: 'Attendance', icon: '✓', roles: ['SUPERADMIN', 'ADMIN', 'TEACHER'] },
+  { href: '/attendance/corrections', label: 'Attendance corrections', icon: '↺', roles: ['SUPERADMIN', 'ADMIN', 'TEACHER'] },
+  { href: '/promotion', label: 'Promote / Retain', icon: '→', roles: ['SUPERADMIN', 'ADMIN', 'TEACHER'] },
   { href: '/fees/plans', label: 'Fee plans', icon: '₹', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
   { href: '/fees/ledger', label: 'Fee ledger', icon: '₿', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
   { href: '/fees/collect', label: 'Collect payment', icon: '＋', roles: ['SUPERADMIN', 'ADMIN', 'ACCOUNTANT'] },
@@ -54,7 +57,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [attempt, pathname]);
   if (!mounted || !user) return <div className="center-page">{offline ? <><p role="alert">Backend unavailable. Your work has not been submitted.</p><button className="button" onClick={() => setAttempt(value => value + 1)}>Retry connection</button></> : <><div className="spinner" /><p>Checking secure session…</p></>}</div>;
-  const protectedLink = links.find(link => pathname === link.href || pathname.startsWith(`${link.href}/`));
+   const protectedLink = [...links].sort((a, b) => b.href.length - a.href.length).find(link => pathname === link.href || pathname.startsWith(`${link.href}/`));
   if (protectedLink && !protectedLink.roles.includes(user.role)) return <div className="center-page"><h1>Access restricted</h1><p>This page is not available for your account.</p><Link href="/dashboard" className="button">Back to dashboard</Link></div>;
   const allowed = links.filter(link => user && link.roles.includes(user.role));
   return <div className="app-layout">
@@ -62,7 +65,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="brand"><div className="brand-mark">P</div><div><strong>PCDAV ERP</strong><span>School workspace</span></div></div>
       <div className="context-chip"><span className="status-dot" /> P DAV PUBLIC SCHOOL<span className="context-session">2026–27</span></div>
       <nav className="nav-list">{allowed.map(link => <Link className={`nav-link ${pathname === link.href || pathname.startsWith(`${link.href}/`) ? 'active' : ''}`} href={link.href} key={link.href}><span>{link.icon}</span>{link.label}</Link>)}</nav>
-       <div className="sidebar-bottom"><div className="implementation-note"><span>LEVEL 1–4</span><p>Student lifecycle, fee accounting, payment collection, and store operations</p></div><button className="logout-link" onClick={() => void logout()}>↪ Sign out</button></div>
+       <div className="sidebar-bottom"><div className="implementation-note"><span>CORE ERP</span><p>Student lifecycle, academics, fee accounting, payment collection, and operations</p></div><button className="logout-link" onClick={() => void logout()}>↪ Sign out</button></div>
     </aside>
     <main className="main-area">
       <header className="topbar"><button className="mobile-nav-toggle" aria-label="Open navigation" onClick={() => setMenuOpen(true)}>☰</button><div className="breadcrumbs">P DAV PUBLIC SCHOOL <span>/</span> Staff workspace</div><div className="top-actions">{offline && <span className="offline-badge">API reconnecting</span>}<div className="user-pill"><div className="avatar">{user?.name.charAt(0)}</div><div><strong>{user?.name}</strong><span>{roleLabel(user?.role)}</span></div></div></div></header>

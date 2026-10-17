@@ -37,6 +37,8 @@ The seed uses the email `superadmin@pcdav.local` unless `SEED_SUPERADMIN_EMAIL` 
 - `/store/groups`, `/store/clusters`, `/store/vendors`, `/store/products`, `/store/stock-receipts`, `/store/issues`, and `/store/defaulters` — store inventory and student issue operations.
 - `/payment-quotes`, `/payments`, `/receipts`, `/cashier-shifts`, and `/reports/*` — Level 4 collection, receipt snapshots, correction history, statements, dues/journal/collection reports and cash close.
 - `/finance/requests` and `/finance/policy` — Accountant correction requests, Admin/Superadmin decisions, and versioned demo financial policy.
+- `/attendance` and `/attendance/correction-requests` — assigned-class daily attendance, immutable correction requests, and Admin/Superadmin decisions.
+- `/promotion-decisions` and `/promotion-batches` — Teacher Promote/Retain decisions and Admin/Superadmin validation/execution of next-session enrollments.
 - `/cashier-shifts/:id/movements` — idempotent deposit, handover and Admin expense movements.
 
 ## Implemented levels 1–3
@@ -81,11 +83,11 @@ The seed uses the email `superadmin@pcdav.local` unless `SEED_SUPERADMIN_EMAIL` 
 
 ## Verification and next milestone
 
-The migration history contains 13 migrations. The Level 4 migrations create payment/receipt/shift records, policy/approval/cash/report/journal/PDF-job records, harden balances and receipt originals, and add append-only financial-history/credit/refund guards. Regenerate Prisma after schema changes (`npm run db:generate`) and deploy reviewed migrations (`npm run db:migrate`). Do not delete history to force deployment. Existing records are not retroactively marked verified; migration backfills use explicit opening entries and retain untraced-history indicators.
+The migration history contains 14 migrations. The latest lifecycle migration adds attendance, correction approval and Promote/Retain history while preserving append-only records. Regenerate Prisma after schema changes (`npm run db:generate`) and deploy reviewed migrations (`npm run db:migrate`). Do not delete history to force deployment. Existing records are not retroactively marked verified; migration backfills use explicit opening entries and retain untraced-history indicators.
 
 `DATABASE_URL=<fresh-disposable-test-url> npm test -- --runInBand` runs 76 integration tests across seven suites using synthetic school IDs. Run this against a fresh disposable database/schema, not the seeded demo schema: the database intentionally permits only one Superadmin. `npm run build` compiles the API. Browser contracts and the live end-to-end synthetic Level 4 test are documented in `../frontend/README.md`.
 
-Remaining production gates: approved financial policy, external bank/refund settlement, school UAT, physical printer/font approval, private object storage, separate production worker, backups/restore, monitoring, live migration and attendance/lifecycle release. Reversal of already-spent advance is supported only when traceable lineage exists; missing historical evidence remains visible and blocks unsafe correction. Import approved live data only after these gates and accountant review.
+Remaining production gates: approved financial policy, external bank/refund settlement, school UAT, physical printer/font approval, private object storage, separate production worker, backups/restore, monitoring and live migration. Reversal of already-spent advance is supported only when traceable lineage exists; missing historical evidence remains visible and blocks unsafe correction. Import approved live data only after these gates and accountant review.
 
 The Word file in the repository root is a generated management report, not a financial receipt. The current-status receipt PDF worker exists for the synthetic demo, but its PostgreSQL byte storage and bounded in-API worker are not the production object-storage/worker architecture.
 

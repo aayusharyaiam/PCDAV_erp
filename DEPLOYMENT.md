@@ -53,17 +53,23 @@ This lets you confirm that the Next.js service builds independently. It will not
    npm start
    ```
 
-9. Choose the smallest plan suitable for a demo.
-10. Do not add a public secret or database URL to the frontend.
-11. Add this temporary environment variable:
+9. Set the health-check path to:
+
+   ```text
+   /health
+   ```
+
+10. Choose the smallest plan suitable for a demo.
+11. Do not add a public secret or database URL to the frontend.
+12. Add this temporary environment variable:
 
    ```text
    API_INTERNAL_URL=https://example.invalid
    ```
 
    Replace it later with the backend URL. The frontend can build with this placeholder because it is only used when the Next.js proxy receives a request.
-12. Create the service and wait for **Live**.
-13. Open the generated `onrender.com` URL. A login screen or a clear API-unavailable message is expected before the backend is ready.
+13. Create the service and wait for **Live**.
+14. Open the generated `onrender.com` URL. A login screen or a clear API-unavailable message is expected before the backend is ready.
 
 If the build fails, open the Render deploy log and compare the failed command with `frontend/README.md`. Do not change package versions or install an unrelated starter kit.
 
@@ -139,7 +145,7 @@ If the selected Render plan exposes **Shell**:
    npm run db:migrate
    ```
 
-4. Confirm that Prisma reports all 13 migrations applied and no pending migrations.
+4. Confirm that Prisma reports all 14 migrations applied and no pending migrations.
 5. Restart the backend service.
 
 ### Alternative method: local terminal with the external database URL
@@ -257,7 +263,23 @@ Perform these checks in order. Use only generated/demo records.
 5. Close the shift with the displayed counted amount. Provide a reason for any variance.
 6. Confirm the closed shift cannot be modified.
 
-## 10. Optional automated live check
+## 10. Keep both Render web services awake
+
+Render's backend health check is configured at `/health`. To send a request every five minutes, create two HTTP(s) monitors in UptimeRobot:
+
+```text
+Monitor 1 name: PCDAV backend health
+URL: https://<backend-service>.onrender.com/health
+Interval: 5 minutes
+
+Monitor 2 name: PCDAV frontend health
+URL: https://<frontend-service>.onrender.com/health
+Interval: 5 minutes
+```
+
+Set your email as the alert contact. The frontend `/health` route returns `{ "status": "ok" }` without requiring login. Test both monitors after saving them. This can reduce Free-plan sleeping, but it does not guarantee uptime or replace paid Render plans and database backups.
+
+## 11. Optional automated live check
 
 Run this only against a disposable local database or a deliberately isolated demo database. The live test refuses non-local database hosts by default; do not weaken that guard for production data.
 
@@ -272,7 +294,7 @@ E2E_DATABASE_URL='postgresql://pcdav:pcdav_local@localhost:5433/pcdav?schema=pub
 
 The expected current result is 34 passing tests: 33 mocked Level 4 contracts and one live synthetic flow. Append-only financial history may remain in the disposable test database; generated fixture accounts are disabled rather than deleting immutable financial records. Run the backend integration suite against a separate fresh disposable schema, not the seeded demo schema, because the application intentionally permits only one Superadmin.
 
-## 11. If deployment fails
+## 12. If deployment fails
 
 Check these items in order:
 
@@ -284,6 +306,6 @@ Check these items in order:
 6. **Migration failure:** stop, preserve the error, check migration status and database connectivity. Do not delete migration history or run `db push`.
 7. **Data concern:** stop all testing and verify that only synthetic records are present before continuing.
 
-## 12. Production gate
+## 13. Production gate
 
 This demo is not a production release. Before any live data or real money, obtain written approval for the unresolved roadmap decisions, use paid hosting with backups/restore, configure private object storage and a separate durable worker, approve receipt fonts/printer output, complete school UAT, reconcile an authorized import, rehearse recovery/cutover, and enable external bank/refund settlement only after its provider controls are verified.

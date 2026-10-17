@@ -39,8 +39,7 @@ Open `http://localhost:3000`. Browser API calls use same-origin `/api/v1` routes
 ## Remaining work and production boundary
 
 - Production-approved financial rules, external bank/refund settlement, private object storage, physical printer/font approval, full school UAT, backups/restore and live migration. The current PDF path is a synthetic demo worker backed by PostgreSQL bytes, not the final production object-storage worker.
-- Day-wise attendance and correction approval screens.
-- Teacher Promote/Retain screen.
+- Attendance, correction approval and Promote/Retain screens are available under `/attendance` and `/promotion`.
 - Withdrawal, certificates, migration, parent/gateway views, and remaining statutory/management reports.
 
 Store issues are included automatically in oldest-due payment allocation. The quote accepts only student and amount; it does not support selecting individual balances. Stock receipts are inventory receipts and are not payment receipts.
