@@ -197,7 +197,7 @@ test.describe('Level 4 completion — MOCKED API', () => {
     await page.getByLabel('Select specific fee obligations and store issues').check();
     await page.getByRole('checkbox', { name: /SI-001/ }).uncheck();
     await page.getByLabel('Amount received / to post ₹').fill('150'); await page.getByRole('button', { name: 'Create quote & review' }).click();
-    await expect(page.getByRole('heading', { name: '3. Review quote' })).toBeVisible();
+     await expect(page.getByRole('heading', { name: '3. Review payment' })).toBeVisible();
     await page.getByRole('checkbox', { name: /SI-001/ }).check(); await expect(page.getByRole('heading', { name: '3. Review quote' })).toHaveCount(0);
     await page.getByRole('checkbox', { name: /SI-001/ }).uncheck(); await page.getByRole('button', { name: 'Create quote & review' }).click();
     await payer(page); await page.getByRole('button', { name: 'Post payment', exact: true }).click();
@@ -205,7 +205,7 @@ test.describe('Level 4 completion — MOCKED API', () => {
     await expect(page.getByLabel('Select specific fee obligations and store issues')).toBeChecked();
     await expect(page.getByLabel('Select specific fee obligations and store issues')).toBeDisabled();
     await expect(page.getByText(/Quoted fee IDs: fee-1 · Quoted store IDs: None/)).toBeVisible();
-    await page.getByRole('button', { name: 'Retry payment' }).click(); await expect(page.getByRole('heading', { name: 'Payment posted', exact: true })).toBeVisible();
+     await page.getByRole('button', { name: 'Retry payment' }).click(); await expect(page.getByRole('heading', { name: 'Receipt ready', exact: true })).toBeVisible();
     const writes = mockApi.calls.filter(c => c.path === '/payments' && c.method === 'POST'); expect(writes[1].request.postData()).toBe(writes[0].request.postData()); expect(writes[1].request.headers()['idempotency-key']).toBe(writes[0].request.headers()['idempotency-key']);
   });
 
@@ -257,7 +257,7 @@ async function reviewQuote(page: Page) {
   await page.goto('/fees/collect?studentId=student-1');
   await page.getByLabel('Amount received / to post ₹').fill('150.00');
   await page.getByRole('button', { name: 'Create quote & review' }).click();
-  await expect(page.getByRole('heading', { name: '3. Review quote' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '3. Review payment' })).toBeVisible();
 }
 async function payer(page: Page) {
   await page.getByLabel('Business date', { exact: true }).fill(f.date);
@@ -320,7 +320,7 @@ test.describe('Level 4 frontend contracts — MOCKED API', () => {
     await expect(page.getByRole('button', { name: 'Find student' })).toBeDisabled();
     await expect(page.getByLabel('Amount received / to post ₹')).toBeDisabled();
     await page.getByRole('button', { name: 'Retry payment' }).click();
-    await expect(page.getByRole('heading', { name: 'Payment posted', exact: true })).toBeVisible();
+     await expect(page.getByRole('heading', { name: 'Receipt ready', exact: true })).toBeVisible();
     const writes = mockApi.calls.filter(call => call.path === '/payments' && call.method === 'POST');
     expect(writes).toHaveLength(3);
     expect(writes[1].request.postData()).toBe(writes[0].request.postData());
@@ -329,7 +329,7 @@ test.describe('Level 4 frontend contracts — MOCKED API', () => {
     expect(writes[2].request.headers()['idempotency-key']).toBe(writes[0].request.headers()['idempotency-key']);
     expect(writes[0].request.headers()['idempotency-key']).toMatch(/^[A-Za-z0-9._:-]{8,128}$/);
     expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('pcdav_pending_payment_attempt:')))).toEqual([]);
-    await page.getByRole('link', { name: /View immutable receipt/ }).click();
+     await page.getByRole('link', { name: /View receipt/ }).click();
     await expect(page.getByRole('region', { name: 'Immutable receipt' })).toContainText('Student at issue');
   });
 
@@ -342,72 +342,56 @@ test.describe('Level 4 frontend contracts — MOCKED API', () => {
     expect(mockApi.calls.filter(call => !['/auth/me', '/finance/requests'].includes(call.path))).toEqual([]);
   });
 
-  for (const channel of ['UPI', 'BANK_TRANSFER', 'CARD', 'OTHER']) {
-    test(`electronic ${channel} requires explicit verified-money confirmation and evidence`, async ({ page, mockApi }) => {
+  for (const method of ['UPI', 'BANK_TRANSFER'] as const) {
+    test(`manual ${method} payment records the counter reference`, async ({ page, mockApi }) => {
       await mockApi.install(call => {
         if (call.path === '/payment-quotes') { expect(call.body).toEqual({ studentId: 'student-1', amountMinor: '15000' }); return { body: f.quote() }; }
         if (call.path === '/payments') {
-          expect(call.body).toEqual({ ...expectedBase('MANUAL_ELECTRONIC'), electronicChannel: channel, reference: 'TXN-001', electronicVerified: true, electronicVerificationNote: f.verifiedEvidence.electronicVerificationNote });
-          return { body: { ...f.paymentResult, payment: { ...f.electronicPayment, electronicChannel: channel }, receipt: { ...f.electronicReceipt, snapshot: { ...f.electronicReceipt.snapshot, payment: { ...f.electronicReceipt.snapshot.payment, channel } } } } };
+          expect(call.body).toEqual({ ...expectedBase(method), reference: 'TXN-001' });
+          return { body: { ...f.paymentResult, payment: { ...f.payment, mode: method, reference: 'TXN-001' }, receipt: { ...f.receipt, snapshot: { ...f.snapshot, payment: { ...f.snapshot.payment, mode: method, reference: 'TXN-001' } } } } };
         }
         return collectionReads(call);
       });
       await reviewQuote(page); await payer(page);
-      await page.getByRole('radio', { name: 'Manual electronic', exact: true }).check();
-      await page.getByLabel('Electronic channel').selectOption(channel);
-      await page.getByLabel('Transaction reference').fill('TXN-001');
-      await expect(page.getByText(/Manual staff verification only/)).toBeVisible();
+      await page.getByRole('radio', { name: method === 'UPI' ? 'UPI' : 'Bank transfer', exact: true }).check();
+      await page.getByLabel(method === 'UPI' ? 'UPI reference' : 'Bank transfer reference').fill('TXN-001');
       await page.getByRole('button', { name: 'Post payment', exact: true }).click();
-      expect(mockApi.calls.filter(call => call.path === '/payments' && call.method === 'POST')).toHaveLength(0);
-      await page.getByLabel('Verification evidence').fill(f.verifiedEvidence.electronicVerificationNote);
-      await page.getByRole('button', { name: 'Post payment', exact: true }).click();
-      expect(mockApi.calls.filter(call => call.path === '/payments' && call.method === 'POST')).toHaveLength(0);
-      await page.getByRole('checkbox', { name: 'I verified receipt of these funds in the school account' }).check();
-      await page.getByRole('button', { name: 'Post payment', exact: true }).click();
-      await expect(page.getByRole('heading', { name: 'Payment posted', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Receipt ready', exact: true })).toBeVisible();
     });
   }
 
-  test('electronic verification resets on changed reference and remains frozen for an ambiguous retry', async ({ page, mockApi }) => {
+  test('manual UPI payment keeps the exact counter command across an ambiguous retry', async ({ page, mockApi }) => {
     let posts = 0;
     await mockApi.install(call => {
       if (call.path === '/payment-quotes') return { body: f.quote() };
       if (call.path === '/payments') {
-        expect(call.body).toEqual({ ...expectedBase('MANUAL_ELECTRONIC'), electronicChannel: 'UPI', reference: 'TXN-001', electronicVerified: true, electronicVerificationNote: f.verifiedEvidence.electronicVerificationNote });
-        return ++posts === 1 ? { status: 503, body: { message: 'Unconfirmed electronic capture' } } : { body: { ...f.paymentResult, payment: f.electronicPayment, receipt: f.electronicReceipt } };
+        expect(call.body).toEqual({ ...expectedBase('UPI'), reference: 'TXN-001' });
+        return ++posts === 1 ? { status: 503, body: { message: 'Unconfirmed counter capture' } } : { body: { ...f.paymentResult, payment: { ...f.payment, mode: 'UPI', reference: 'TXN-001' }, receipt: f.receipt } };
       }
       return collectionReads(call);
     });
     await reviewQuote(page); await payer(page);
-    await page.getByRole('radio', { name: 'Manual electronic', exact: true }).check();
-    await page.getByLabel('Transaction reference').fill('Old reference');
-    await page.getByLabel('Verification evidence').fill(f.verifiedEvidence.electronicVerificationNote);
-    const confirmation = page.getByRole('checkbox', { name: 'I verified receipt of these funds in the school account' });
-    await confirmation.check();
-    await page.getByLabel('Transaction reference').fill('TXN-001');
-    await expect(confirmation).not.toBeChecked();
-    await confirmation.check();
+    await page.getByRole('radio', { name: 'UPI', exact: true }).check();
+    await page.getByLabel('UPI reference').fill('TXN-001');
     await page.getByRole('button', { name: 'Post payment', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Retry payment' })).toBeVisible();
     await page.reload();
-    await expect(confirmation).toBeChecked(); await expect(confirmation).toBeDisabled();
-    await expect(page.getByLabel('Verification evidence')).toHaveValue(f.verifiedEvidence.electronicVerificationNote);
-    await expect(page.getByLabel('Verification evidence')).toBeDisabled();
-    await expect(page.getByLabel('Transaction reference')).toBeDisabled();
+    await expect(page.getByLabel('UPI reference')).toHaveValue('TXN-001');
+    await expect(page.getByLabel('UPI reference')).toBeDisabled();
     await page.getByRole('button', { name: 'Retry payment' }).click();
-    await expect(page.getByRole('heading', { name: 'Payment posted', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Receipt ready', exact: true })).toBeVisible();
     const writes = mockApi.calls.filter(call => call.path === '/payments' && call.method === 'POST');
     expect(writes).toHaveLength(2);
     expect(writes[1].request.postData()).toBe(writes[0].request.postData());
     expect(writes[1].request.headers()['idempotency-key']).toBe(writes[0].request.headers()['idempotency-key']);
   });
 
-  test('cheque posts number/bank/date and handles a null receipt as pending', async ({ page, mockApi }) => {
+  test('cheque posts number/bank/date and issues a counter receipt', async ({ page, mockApi }) => {
     await mockApi.install(call => {
       if (call.path === '/payment-quotes') return { body: f.quote() };
       if (call.path === '/payments') {
         expect(call.body).toEqual({ ...expectedBase('CHEQUE'), chequeNumber: '123456', chequeBank: 'Test Bank', chequeDate: '2026-10-12' });
-        return { body: { ...f.paymentResult, payment: f.pendingCheque, receipt: null, allocations: [], creditApplications: [], overpaymentCredit: null, events: [{ ...f.paymentResult.events[0], paymentId: f.pendingCheque.id, type: 'CHEQUE_RECEIVED', reason: 'Cheque payment recorded pending clearance' }] } };
+        return { body: { ...f.paymentResult, payment: { ...f.payment, mode: 'CHEQUE', chequeNumber: '123456', chequeBank: 'Test Bank', chequeDate: '2026-10-12T00:00:00.000Z' }, receipt: { ...f.receipt, snapshot: { ...f.snapshot, payment: { ...f.snapshot.payment, mode: 'CHEQUE', chequeNumber: '123456', chequeBank: 'Test Bank', chequeDate: '2026-10-12' } } } } };
       }
       return collectionReads(call);
     });
@@ -415,9 +399,8 @@ test.describe('Level 4 frontend contracts — MOCKED API', () => {
     await page.getByRole('radio', { name: 'Cheque', exact: true }).check();
     await page.getByLabel('Cheque number').fill('123456'); await page.getByLabel('Cheque bank').fill('Test Bank'); await page.getByLabel('Cheque date').fill('2026-10-12');
     await page.getByRole('button', { name: 'Post payment', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Cheque pending clearance' })).toBeVisible();
-    await expect(page.getByText(/No final receipt issued yet/)).toBeVisible();
-    await expect(page.getByRole('link', { name: /View immutable receipt/ })).toHaveCount(0);
+     await expect(page.getByRole('heading', { name: 'Receipt ready', exact: true })).toBeVisible();
+     await expect(page.getByRole('link', { name: /View receipt/ })).toBeVisible();
   });
 
   test('no-dues advance is quotable and stale-quote rejection releases the frozen command', async ({ page, mockApi }) => {
@@ -435,7 +418,7 @@ test.describe('Level 4 frontend contracts — MOCKED API', () => {
     await expect(page.locator('.notice[role="alert"]')).toContainText('Payment quote is stale');
     await expect(page.getByRole('button', { name: 'Retry payment' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Create quote & review' }).click();
-    await expect(page.getByRole('heading', { name: '3. Review quote' })).toBeVisible(); expect(quotes).toBe(2);
+     await expect(page.getByRole('heading', { name: '3. Review payment' })).toBeVisible(); expect(quotes).toBe(2);
   });
 
   test('receipt snapshot renders school, payer, cash and allocations; reprint reason is recorded before printing', async ({ page, mockApi }) => {

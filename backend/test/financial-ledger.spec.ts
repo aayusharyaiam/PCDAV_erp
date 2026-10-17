@@ -82,27 +82,21 @@ describe('Balanced journal, assessment lineage and financial reports', () => {
     expect(statement.totals.journal.reconciled).toBe(true);
   });
 
-  it('assesses configured demo bounce fees once for pending and cleared cheques under approval retries', async () => {
+  it('assesses configured demo bounce fees once for an immediately recorded cheque under approval retries', async () => {
     await f.policy({ bounceFeeMinor: '250' });
-    for (const cleared of [false, true]) {
-      const student = await f.student(); const pending = await f.cheque(student.studentId);
-      if (cleared) {
-        await f.client(f.accountant, 'post', `/payments/${pending.payment.id}/clear-cheque`).send({ businessDate: f.date, reason: 'Synthetic bank confirmation' }).expect(201);
-        await f.client(f.admin, 'post', '/assessments').send({ enrollmentId: student.enrollmentId, periods: ['2026-04'], reason: 'Spend cleared cheque advance' }).expect(201);
-      }
-      const row = await f.request(pending.payment.id, { type: 'BOUNCE', amountMinor: undefined, reference: 'BANK-RETURN-TEST' });
-      const path = `/finance/requests/${row.id}/approve`; const body = { reason: 'Confirm exact cheque bounce' };
-      await Promise.all([1, 2].map(() => f.client(f.admin, 'post', path).send(body).expect(201)));
-      await f.client(f.admin, 'post', `/payments/${pending.payment.id}/bounce`).send({ businessDate: f.date, reason: 'Duplicate bounce cannot charge twice' }).expect(409);
-      const fees = await f.db.feeObligation.findMany({ where: { bouncePaymentId: pending.payment.id } });
-      expect(fees).toHaveLength(1); expect(fees[0].amountMinor).toBe(250n);
-      const statement = await f.statement(student.studentId);
-      expect(statement.payments[0].events.find((event: any) => event.type === 'CHEQUE_BOUNCED').metadata.reference).toBe('BANK-RETURN-TEST');
-      expect(statement.totals).toMatchObject({ outstandingMinor: cleared ? '1250' : '250', availableCreditMinor: '0', pendingChequeMinor: '0', journal: { reconciled: true } });
-      expect(statement.payments[0].receipt === null).toBe(!cleared);
-      const report = (await f.client(f.admin, 'get', `/reports/journal?studentId=${student.studentId}&limit=1`).expect(200)).body;
-      expect(report.totals.balanced).toBe(true); expect(report.total).toBeGreaterThanOrEqual(1);
-    }
+    const student = await f.student(); const recorded = await f.cheque(student.studentId);
+    const row = await f.request(recorded.payment.id, { type: 'BOUNCE', amountMinor: undefined, reference: 'BANK-RETURN-TEST' });
+    const path = `/finance/requests/${row.id}/approve`; const body = { reason: 'Confirm exact cheque bounce' };
+    await Promise.all([1, 2].map(() => f.client(f.admin, 'post', path).send(body).expect(201)));
+    await f.client(f.admin, 'post', `/payments/${recorded.payment.id}/bounce`).send({ businessDate: f.date, reason: 'Duplicate bounce cannot charge twice' }).expect(409);
+    const fees = await f.db.feeObligation.findMany({ where: { bouncePaymentId: recorded.payment.id } });
+    expect(fees).toHaveLength(1); expect(fees[0].amountMinor).toBe(250n);
+    const statement = await f.statement(student.studentId);
+    expect(statement.payments[0].events.find((event: any) => event.type === 'CHEQUE_BOUNCED').metadata.reference).toBe('BANK-RETURN-TEST');
+    expect(statement.totals).toMatchObject({ outstandingMinor: '250', availableCreditMinor: '0', pendingChequeMinor: '0', journal: { reconciled: true } });
+    expect(statement.payments[0].receipt.status).toBe('VOID');
+    const report = (await f.client(f.admin, 'get', `/reports/journal?studentId=${student.studentId}&limit=1`).expect(200)).body;
+    expect(report.totals.balanced).toBe(true); expect(report.total).toBeGreaterThanOrEqual(1);
     await f.policy({ bounceFeeMinor: '0' });
   });
 
@@ -126,13 +120,13 @@ describe('Balanced journal, assessment lineage and financial reports', () => {
     await f.client(f.accountant, 'get', '/reports/journal?fromDate=2026-12-01&toDate=2026-01-01').expect(400);
   });
 
-  it('keeps pending cheques separate and reports capture/correction event dates, modes and original cashier filters', async () => {
+  it('reports immediately recorded manual methods and correction event dates by original cashier', async () => {
     const student = await f.student(); const paid = await f.capture(student.studentId, '1000');
     await f.cheque(student.studentId, '250');
     const row = await f.request(paid.payment.id, { amountMinor: '125', businessDate: '2026-10-28' });
     await f.client(f.superadmin, 'post', `/finance/requests/${row.id}/approve`).send({ reason: 'Later dated approved refund' }).expect(201);
-    expect((await f.statement(student.studentId)).totals).toMatchObject({ pendingChequeMinor: '250', availableCreditMinor: '875', refundedMinor: '125', journal: { reconciled: true } });
-    const path = `/reports/collections?fromDate=2026-10-28&toDate=2026-10-28&mode=MANUAL_ELECTRONIC&cashierId=${f.accountant.id}`;
+    expect((await f.statement(student.studentId)).totals).toMatchObject({ pendingChequeMinor: '0', availableCreditMinor: '1125', refundedMinor: '125', journal: { reconciled: true } });
+    const path = `/reports/collections?fromDate=2026-10-28&toDate=2026-10-28&mode=UPI&cashierId=${f.accountant.id}`;
     await f.client(f.accountant, 'get', path).expect(200).expect(res => { expect(res.body.basis).toBe('EVENT_BUSINESS_DATE'); expect(res.body.refundedMinor).toBe('125'); expect(res.body.netCapturedMinor).toBe('-125'); expect(res.body.cashierBasis).toBe('ORIGINAL_COLLECTOR'); });
     await f.client(f.accountant, 'get', `/reports/collections?fromDate=2026-10-28&toDate=2026-10-28&cashierId=${f.admin.id}`).expect(200).expect(res => expect(res.body.refundedMinor).toBe('0'));
     const journal = (await f.client(f.admin, 'get', `/reports/journal?fromDate=2026-10-28&toDate=2026-10-28&studentId=${student.studentId}&limit=1`).expect(200)).body;

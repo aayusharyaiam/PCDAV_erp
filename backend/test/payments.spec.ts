@@ -46,7 +46,7 @@ describe('Level 4 payment-to-receipt workflows', () => {
     return (await client(accountant, 'post', '/payment-quotes').send({ studentId: id, amountMinor }).expect(201)).body;
   }
 
-  const electronicBody = (quote: { id: string; version: number; amountMinor: string }, extra = {}) => ({ quoteId: quote.id, quoteVersion: quote.version, receivedAmountMinor: quote.amountMinor, businessDate: '2026-10-14', mode: 'MANUAL_ELECTRONIC', payerName: 'Test Guardian', electronicChannel: 'UPI', reference: randomUUID(), electronicVerified: true, electronicVerificationNote: 'Matched credit in school bank statement', ...extra });
+  const electronicBody = (quote: { id: string; version: number; amountMinor: string }, extra = {}) => ({ quoteId: quote.id, quoteVersion: quote.version, receivedAmountMinor: quote.amountMinor, businessDate: '2026-10-14', mode: 'UPI', payerName: 'Test Guardian', ...extra });
 
   async function electronicFor(id: string, amountMinor: string) {
     const quote = await quoteFor(id, amountMinor);
@@ -177,24 +177,24 @@ describe('Level 4 payment-to-receipt workflows', () => {
     await client(admin, 'get', '/reports/collections?fromDate=2026-10-15&toDate=2026-10-15').expect(200).expect(response => { expect(response.body.reversedMinor).toBe('15000'); expect(response.body.netCapturedMinor).toBe('-15000'); });
   });
 
-  it('holds cheques until clearance, issues a receipt on clear, and retains bounce history', async () => {
-    await db.feeObligation.create({ data: { schoolId, studentId, enrollmentId, feeHeadId, periodKey: '2026-06', dueDate: new Date('2026-06-05'), amountMinor: 4000n, status: 'OPEN' } });
+  it('records cheques immediately, issues receipts, and retains bounce history', async () => {
+    const newObligation = await db.feeObligation.create({ data: { schoolId, studentId, enrollmentId, feeHeadId, periodKey: '2026-06', dueDate: new Date('2026-06-05'), amountMinor: 4000n, status: 'OPEN' } });
     const shift = await client(accountant, 'post', '/cashier-shifts').send({ businessDate: '2026-10-14', openingFloatMinor: '0' }).expect(201);
-    const quote = await client(accountant, 'post', '/payment-quotes').send({ studentId, amountMinor: '4000' }).expect(201);
+    const quote = await client(accountant, 'post', '/payment-quotes').send({ studentId, amountMinor: '4000', obligationIds: [newObligation.id], storeIssueIds: [] }).expect(201);
     const body = { quoteId: quote.body.id, quoteVersion: quote.body.version, receivedAmountMinor: '4000', businessDate: '2026-10-14', mode: 'CHEQUE', payerName: 'Cheque Guardian', chequeNumber: `CHQ-${suffix.slice(0, 8)}`, chequeBank: 'Test Bank', chequeDate: '2026-10-12' };
-    const pending = await client(accountant, 'post', '/payments').set('Idempotency-Key', 'payment-cheque-001').send(body).expect(201);
-    expect(pending.body.payment.status).toBe('PENDING_CHEQUE');
-    expect(pending.body.receipt).toBeNull();
-    expect((await db.feeObligation.findFirstOrThrow({ where: { schoolId, periodKey: '2026-06' } })).paidMinor).toBe(0n);
+    const recorded = await client(accountant, 'post', '/payments').set('Idempotency-Key', 'payment-cheque-001').send(body).expect(201);
+    expect(recorded.body.payment.status).toBe('CAPTURED');
+    expect(recorded.body.receipt.receiptNumber).toMatch(/000002$/);
+    expect(recorded.body.events.map((event: { type: string }) => event.type)).toContain('PAYMENT_CAPTURED');
+    const recordedObligation = await db.feeObligation.findUniqueOrThrow({ where: { id: newObligation.id } });
+    expect(recordedObligation.paidMinor + recordedObligation.creditAppliedMinor).toBe(4000n);
 
-    const cleared = await client(accountant, 'post', `/payments/${pending.body.payment.id}/clear-cheque`).send({ businessDate: '2026-10-14', reason: 'Bank confirmation received' }).expect(201);
-    expect(cleared.body.payment.status).toBe('CLEARED');
-    expect(cleared.body.receipt.receiptNumber).toMatch(/000002$/);
-    expect(cleared.body.events.map((event: { type: string }) => event.type)).toContain('CHEQUE_CLEARED');
-    const bounced = await client(admin, 'post', `/payments/${pending.body.payment.id}/bounce`).send({ businessDate: '2026-10-14', reason: 'Cheque returned unpaid' }).expect(201);
+    const bounced = await client(admin, 'post', `/payments/${recorded.body.payment.id}/bounce`).send({ businessDate: '2026-10-14', reason: 'Cheque returned unpaid' }).expect(201);
     expect(bounced.body.payment.status).toBe('BOUNCED');
     expect(bounced.body.receipt.status).toBe('VOID');
     expect(bounced.body.events.map((event: { type: string }) => event.type)).toContain('CHEQUE_BOUNCED');
+    const releasedObligation = await db.feeObligation.findUniqueOrThrow({ where: { id: recordedObligation.id } });
+    expect(releasedObligation.paidMinor + releasedObligation.creditAppliedMinor).toBe(0n);
     expect((await db.cashierShift.findUniqueOrThrow({ where: { id: shift.body.id } })).status).toBe('OPEN');
 
     const electronicQuote = await client(accountant, 'post', '/payment-quotes').send({ studentId, amountMinor: '1000' }).expect(201);
@@ -207,6 +207,25 @@ describe('Level 4 payment-to-receipt workflows', () => {
       expect(response.body.events.map((event: { type: string }) => event.type)).toContain('REFUNDED');
       expect(response.body.refunds[0].amountMinor).toBe('1000');
     });
+  });
+
+  it('keeps legacy pending-cheque rows clearable without changing their history', async () => {
+    const student = await freshStudent();
+    const obligation = await db.feeObligation.create({ data: { schoolId, ...student, feeHeadId, periodKey: randomUUID(), dueDate: new Date('2026-04-01'), amountMinor: 1000n } });
+    const shift = await client(accountant, 'post', '/cashier-shifts').send({ businessDate: '2026-10-21', openingFloatMinor: '0' }).expect(201);
+    const quote = await quoteFor(student.studentId, '1000');
+    const legacy = await db.payment.create({ data: {
+      schoolId, studentId: student.studentId, cashierId: accountantId, shiftId: shift.body.id, quoteId: quote.id,
+      idempotencyKey: randomUUID(), requestHash: 'legacy-pending-cheque', businessDate: new Date('2026-10-21'), mode: 'CHEQUE', status: 'PENDING_CHEQUE', currency: 'INR',
+      receivedAmountMinor: 1000n, changeMinor: 0n, payerName: 'Legacy cheque payer', payerPhone: '', reference: '', electronicChannel: '',
+      chequeNumber: 'LEGACY-001', chequeBank: 'Legacy Bank', chequeDate: new Date('2026-10-20'),
+    } });
+    await db.paymentQuote.update({ where: { id: quote.id }, data: { status: 'CONSUMED' } });
+    const cleared = await client(accountant, 'post', `/payments/${legacy.id}/clear-cheque`).send({ businessDate: '2026-10-21', reason: 'Preserve legacy cheque clearance history' }).expect(201);
+    expect(cleared.body.payment.status).toBe('CLEARED');
+    expect(cleared.body.receipt).not.toBeNull();
+    expect(cleared.body.events.map((event: { type: string }) => event.type)).toContain('CHEQUE_CLEARED');
+    expect((await db.feeObligation.findUniqueOrThrow({ where: { id: obligation.id } })).paidMinor).toBe(1000n);
   });
 
   it('replays a small refund command exactly, including after later corrections', async () => {
@@ -234,64 +253,42 @@ describe('Level 4 payment-to-receipt workflows', () => {
     expect(await db.refundCommand.count({ where: { schoolId, paymentId: captured.payment.id } })).toBe(2);
   });
 
-  it('rejects unverified manual electronic capture', async () => {
+  it('records UPI without gateway verification or a transaction reference', async () => {
     const student = await freshStudent();
     const quote = await quoteFor(student.studentId, '100');
-    for (const extra of [{ electronicVerified: undefined }, { electronicVerified: false }, { electronicVerified: 'true' }, { electronicVerified: 1 }, { electronicVerified: null }, { electronicVerificationNote: undefined }, { electronicVerificationNote: null }, { electronicVerificationNote: '   ' }]) {
-      await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send(electronicBody(quote, extra)).expect(400);
-    }
-    expect(await db.payment.count({ where: { schoolId, studentId: student.studentId } })).toBe(0);
-    expect((await db.paymentQuote.findUniqueOrThrow({ where: { id: quote.id } })).status).toBe('OPEN');
-    expect(await db.receipt.count({ where: { schoolId, studentId: student.studentId } })).toBe(0);
-    await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send(electronicBody(quote, { mode: 'CASH', electronicChannel: undefined, tenderedAmountMinor: '100' })).expect(400);
+    const captured = await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send(electronicBody(quote)).expect(201);
+    expect(captured.body.payment).toMatchObject({ mode: 'UPI', status: 'CAPTURED', reference: '', electronicChannel: 'UPI', electronicVerifiedAt: null, electronicVerifiedBy: null, electronicVerificationNote: null });
+    expect(captured.body.receipt).not.toBeNull();
+    expect((await db.paymentQuote.findUniqueOrThrow({ where: { id: quote.id } })).status).toBe('CONSUMED');
   });
 
-  it('captures verified electronic money once under concurrent retries and retains staff evidence', async () => {
+  it('captures manual bank-transfer money once under concurrent retries without verification evidence', async () => {
     const student = await freshStudent();
     const quote = await quoteFor(student.studentId, '1000');
     const key = randomUUID();
-    const body = electronicBody(quote, { reference: ' \tVERIFIED-001\n ', electronicVerificationNote: '  Matched school statement entry 001  ' });
+    const body = electronicBody(quote, { mode: 'BANK_TRANSFER' });
     const [first, retry] = await Promise.all([1, 2].map(() => client(accountant, 'post', '/payments').set('Idempotency-Key', key).send(body).expect(201)));
     expect(retry.body).toEqual(first.body);
-    expect(first.body.payment).toMatchObject({ status: 'CAPTURED', reference: 'VERIFIED-001', electronicVerifiedBy: accountantId, electronicVerificationNote: 'Matched school statement entry 001' });
-    expect(first.body.payment.electronicVerifiedAt).toBe(first.body.payment.capturedAt);
+    expect(first.body.payment).toMatchObject({ status: 'CAPTURED', mode: 'BANK_TRANSFER', reference: '', electronicChannel: 'BANK_TRANSFER', electronicVerifiedBy: null, electronicVerificationNote: null });
     expect(await db.receipt.count({ where: { schoolId, studentId: student.studentId } })).toBe(1);
     const audit = await db.auditEvent.findFirstOrThrow({ where: { schoolId, entityId: first.body.payment.id, action: 'PAYMENT_CAPTURED' } });
     expect(audit.actorId).toBe(accountantId);
-    expect(audit.after).toMatchObject({ payment: { electronicVerifiedBy: accountantId, electronicVerificationNote: 'Matched school statement entry 001' } });
-    await client(accountant, 'post', '/payments').set('Idempotency-Key', key).send({ ...body, electronicVerificationNote: 'Different evidence' }).expect(409);
+    expect(audit.after).toMatchObject({ payment: { mode: 'BANK_TRANSFER', electronicVerifiedBy: null, electronicVerificationNote: null } });
+    expect(first.body.payment.electronicVerifiedAt).toBeNull();
+    await client(accountant, 'post', '/payments').set('Idempotency-Key', key).send({ ...body, payerName: 'Different Guardian' }).expect(409);
     const otherQuote = await quoteFor((await freshStudent()).studentId, '1000');
-    await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send(electronicBody(otherQuote, { reference: '\u00a0VERIFIED-001\t' })).expect(409);
-    expect((await db.paymentQuote.findUniqueOrThrow({ where: { id: otherQuote.id } })).status).toBe('OPEN');
-    await client(admin, 'post', `/payments/${first.body.payment.id}/reverse`).send({ businessDate: '2026-10-14', reason: 'Reference remains reserved after reversal' }).expect(201);
-    await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send(electronicBody(otherQuote, { reference: 'VERIFIED-001' })).expect(409);
-    // Channel scopes the identity; the same string in another channel is valid.
-    await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send(electronicBody(otherQuote, { reference: 'VERIFIED-001', electronicChannel: 'BANK_TRANSFER' })).expect(201);
-
-    // Bypass the service to prove trim-normalized uniqueness is enforced by SQL.
-    const stored = await db.payment.findUniqueOrThrow({ where: { id: first.body.payment.id } });
-    await expect(db.payment.create({ data: { ...stored, id: randomUUID(), quoteId: null, idempotencyKey: randomUUID(), reference: '\uFEFF\t VERIFIED-001\n\u3000' } })).rejects.toMatchObject({ code: 'P2002' });
-    const foreignSchool = await db.school.create({ data: { name: `Reference scope ${suffix}` } });
-    try {
-      const foreign = await db.payment.create({ data: { ...stored, id: randomUUID(), schoolId: foreignSchool.id, quoteId: null, idempotencyKey: randomUUID() } });
-      expect(foreign.reference).toBe(stored.reference);
-    } finally {
-      await cleanupFinance(db, foreignSchool.id);
-      await db.payment.deleteMany({ where: { schoolId: foreignSchool.id } });
-      await db.school.delete({ where: { id: foreignSchool.id } });
-    }
+    await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send(electronicBody(otherQuote, { mode: 'BANK_TRANSFER' })).expect(201);
   });
 
-  it('deduplicates concurrent electronic references across different students and keys', async () => {
+  it('allows the same optional manual reference without treating it as gateway identity', async () => {
     const students = await Promise.all([freshStudent(), freshStudent()]);
     const quotes = await Promise.all(students.map(student => quoteFor(student.studentId, '1000')));
     const results = await Promise.all(quotes.map((quote, index) => client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send(electronicBody(quote, { reference: index ? ' \tRACE-REFERENCE\n' : 'RACE-REFERENCE' }))));
-    expect(results.map(result => result.status).sort()).toEqual([201, 409]);
+    expect(results.map(result => result.status).sort()).toEqual([201, 201]);
     const ids = students.map(student => student.studentId);
-    expect(await db.payment.count({ where: { schoolId, studentId: { in: ids } } })).toBe(1);
-    expect(await db.receipt.count({ where: { schoolId, studentId: { in: ids } } })).toBe(1);
-    expect(await db.feeCredit.count({ where: { schoolId, studentId: { in: ids } } })).toBe(1);
-    expect(await db.paymentQuote.count({ where: { id: { in: quotes.map(quote => quote.id) }, status: 'OPEN' } })).toBe(1);
+    expect(await db.payment.count({ where: { schoolId, studentId: { in: ids } } })).toBe(2);
+    expect(await db.receipt.count({ where: { schoolId, studentId: { in: ids } } })).toBe(2);
+    expect(await db.paymentQuote.count({ where: { id: { in: quotes.map(quote => quote.id) }, status: 'OPEN' } })).toBe(0);
   });
 
   it('posts a small concurrent refund only once and scopes command keys to actor', async () => {
@@ -340,7 +337,7 @@ describe('Level 4 payment-to-receipt workflows', () => {
     const quote = await quoteFor(student.studentId, '100');
     const body = electronicBody(quote);
     await client(accountant, 'post', '/payments').send(body).expect(400);
-    for (const extra of [{ payerName: '   ' }, { reference: '' }, { electronicChannel: null }, { currency: 'USD' }, { receivedAmountMinor: 100 }, { businessDate: '2026-02-30' }, { mode: 'CASH', electronicChannel: null, tenderedAmountMinor: '99' }, { mode: 'CHEQUE', electronicChannel: null }, { unexpected: 'field' }]) {
+    for (const extra of [{ payerName: '   ' }, { currency: 'USD' }, { receivedAmountMinor: 100 }, { businessDate: '2026-02-30' }, { mode: 'UNKNOWN' }, { mode: 'CASH', tenderedAmountMinor: '99' }, { mode: 'CASH', chequeNumber: '123' }, { unexpected: 'field' }]) {
       await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send({ ...body, ...extra }).expect(400);
     }
     await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send({ ...body, quoteVersion: 2 }).expect(409);
@@ -415,25 +412,21 @@ describe('Level 4 payment-to-receipt workflows', () => {
     });
   });
 
-  it('recalculates pending cheques at clearance and paginates actual receipts rather than pending payments', async () => {
+  it('captures a cheque with no clearance step and includes it in receipts and daily totals', async () => {
     const student = await freshStudent();
     const obligation = await db.feeObligation.create({ data: { schoolId, ...student, feeHeadId, periodKey: '2026-04', dueDate: new Date('2026-04-01'), amountMinor: 1000n } });
+    await client(accountant, 'post', '/cashier-shifts').send({ businessDate: '2026-10-19', openingFloatMinor: '0' }).expect(201);
     const quote = await quoteFor(student.studentId, '1000');
-    const pending = (await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send({ quoteId: quote.id, quoteVersion: quote.version, receivedAmountMinor: '1000', businessDate: '2026-10-14', mode: 'CHEQUE', payerName: 'Cheque Payer', chequeBank: 'Test Bank', chequeNumber: '123456', chequeDate: '2026-10-14' }).expect(201)).body;
-    await electronicFor(student.studentId, '500');
-    await client(accountant, 'get', `/receipts?studentId=${student.studentId}&limit=1`).expect(200).expect(response => { expect(response.body.total).toBe(1); expect(response.body.items).toHaveLength(1); });
-    await client(accountant, 'post', '/cashier-shifts').send({ businessDate: '2026-10-16', openingFloatMinor: '0' }).expect(201);
-    const cleared = (await client(accountant, 'post', `/payments/${pending.payment.id}/clear-cheque`).send({ businessDate: '2026-10-16', reason: 'Cheque cleared after partial payment' }).expect(201)).body;
-    expect(cleared.allocations[0].amountMinor).toBe('500');
-    expect(cleared.overpaymentCredit.remainingMinor).toBe('500');
-    expect(cleared.receipt.snapshot.payment.captureBusinessDate).toBe('2026-10-16');
+    const captured = (await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send({ quoteId: quote.id, quoteVersion: quote.version, receivedAmountMinor: '1000', businessDate: '2026-10-19', mode: 'CHEQUE', payerName: 'Cheque Payer' }).expect(201)).body;
+    expect(captured.payment.status).toBe('CAPTURED');
+    expect(captured.receipt).not.toBeNull();
+    expect(captured.allocations[0].amountMinor).toBe('1000');
+    expect(captured.overpaymentCredit).toBeNull();
     expect((await db.feeObligation.findUniqueOrThrow({ where: { id: obligation.id } })).paidMinor).toBe(1000n);
-    await client(accountant, 'post', `/payments/${pending.payment.id}/clear-cheque`).send({ businessDate: '2026-10-16', reason: 'Duplicate clear attempt' }).expect(409);
-    await client(accountant, 'get', `/receipts?studentId=${student.studentId}&limit=1&page=2`).expect(200).expect(response => { expect(response.body.total).toBe(2); expect(response.body.items).toHaveLength(1); });
-    await client(accountant, 'get', '/reports/collections?fromDate=2026-10-16&toDate=2026-10-16&mode=CHEQUE').expect(200).expect(response => expect(response.body.capturedMinor).toBe('1000'));
-    await client(admin, 'post', `/payments/${pending.payment.id}/bounce`).send({ businessDate: '2026-10-17', reason: 'Bank returned previously cleared cheque' }).expect(201);
-    expect((await db.feeObligation.findUniqueOrThrow({ where: { id: obligation.id } })).paidMinor).toBe(500n);
-    await client(accountant, 'get', '/reports/collections?fromDate=2026-10-17&toDate=2026-10-17&mode=CHEQUE').expect(200).expect(response => expect(response.body.netCapturedMinor).toBe('-1000'));
+    await client(accountant, 'get', `/receipts?studentId=${student.studentId}&limit=1`).expect(200).expect(response => { expect(response.body.total).toBe(1); expect(response.body.items).toHaveLength(1); });
+    await client(accountant, 'post', `/payments/${captured.payment.id}/clear-cheque`).send({ businessDate: '2026-10-19', reason: 'No clearance required for a new manual cheque capture' }).expect(409);
+    await client(accountant, 'get', '/reports/collections?fromDate=2026-10-19&toDate=2026-10-19&mode=CHEQUE').expect(200).expect(response => expect(response.body.capturedMinor).toBe('1000'));
+    expect((await client(accountant, 'get', '/reports/collections?fromDate=2026-10-19&toDate=2026-10-19')).body.byMode.find((item: { mode: string }) => item.mode === 'CHEQUE').capturedMinor).toBe('1000');
   });
 
   it('rolls back payment, quote consumption, allocation, credit and audit when receipt issuance fails', async () => {
@@ -463,7 +456,7 @@ describe('Level 4 payment-to-receipt workflows', () => {
     await client(accountant, 'post', '/payments').set('Idempotency-Key', key).send(body).expect(201);
   });
 
-  it('scopes all financial objects to school and bounces pending cheques without issuing receipts', async () => {
+  it('scopes all financial objects to school and audits manual cheque corrections', async () => {
     const foreignSchool = await db.school.create({ data: { name: `Foreign payment school ${suffix}` } });
     const localUser = await db.user.findUniqueOrThrow({ where: { id: adminId } });
     const foreignUser = await db.user.create({ data: { schoolId: foreignSchool.id, role: 'ADMIN', name: 'Foreign Admin', email: `foreign-payments-${suffix}@example.test`, passwordHash: localUser.passwordHash, mustChangePassword: false } });
@@ -481,14 +474,17 @@ describe('Level 4 payment-to-receipt workflows', () => {
       await client(foreign, 'post', `/payments/${captured.payment.id}/refunds`).set('Idempotency-Key', randomUUID()).send({ amountMinor: '10', reason: 'Cross school refund denied' }).expect(400);
       await client(foreign, 'get', '/receipts').expect(200).expect(response => expect(response.body.total).toBe(0));
       await client(foreign, 'get', '/reports/collections').expect(200).expect(response => expect(response.body.capturedMinor).toBe('0'));
-      const pendingQuote = await quoteFor(student.studentId, '100');
-      const pending = (await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send({ quoteId: pendingQuote.id, quoteVersion: 1, receivedAmountMinor: '100', businessDate: '2026-10-14', mode: 'CHEQUE', payerName: 'Pending Cheque Payer', chequeBank: 'Test Bank', chequeNumber: '789123', chequeDate: '2026-10-14' }).expect(201)).body;
-      await client(accountant, 'post', `/payments/${pending.payment.id}/bounce`).send({ reason: 'Accountant cannot bounce' }).expect(403);
-      const bounced = (await client(admin, 'post', `/payments/${pending.payment.id}/bounce`).send({ reason: 'Cheque rejected before clearance', businessDate: '2026-10-14' }).expect(201)).body;
-      expect(bounced.receipt).toBeNull();
-      expect(bounced.allocations).toEqual([]);
-      expect(bounced.events.find((event: { type: string }) => event.type === 'CHEQUE_BOUNCED').amountMinor).toBe('0');
-      await client(accountant, 'post', `/payments/${pending.payment.id}/clear-cheque`).send({ reason: 'Cannot clear bounced cheque', businessDate: '2026-10-14' }).expect(409);
+      const chequeStudent = await freshStudent();
+      const chequeObligation = await db.feeObligation.create({ data: { schoolId, ...chequeStudent, feeHeadId, periodKey: randomUUID(), dueDate: new Date('2026-04-01'), amountMinor: 100n } });
+      const chequeQuote = await quoteFor(chequeStudent.studentId, '100');
+      const recorded = (await client(accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send({ quoteId: chequeQuote.id, quoteVersion: 1, receivedAmountMinor: '100', businessDate: '2026-10-14', mode: 'CHEQUE', payerName: 'Manual Cheque Payer' }).expect(201)).body;
+      await client(accountant, 'post', `/payments/${recorded.payment.id}/bounce`).send({ reason: 'Accountant cannot bounce' }).expect(403);
+      const bounced = (await client(admin, 'post', `/payments/${recorded.payment.id}/bounce`).send({ reason: 'Cheque recorded in error', businessDate: '2026-10-14' }).expect(201)).body;
+      expect(bounced.receipt.status).toBe('VOID');
+      expect(bounced.allocations).toHaveLength(1);
+      expect(bounced.events.find((event: { type: string }) => event.type === 'CHEQUE_BOUNCED').amountMinor).toBe('100');
+      expect((await db.feeObligation.findUniqueOrThrow({ where: { id: chequeObligation.id } })).paidMinor).toBe(0n);
+      await client(accountant, 'post', `/payments/${recorded.payment.id}/clear-cheque`).send({ reason: 'Cannot clear captured cheque', businessDate: '2026-10-14' }).expect(409);
     } finally {
       await db.auditEvent.deleteMany({ where: { schoolId: foreignSchool.id } });
       await db.loginSession.deleteMany({ where: { userId: foreignUser.id } });

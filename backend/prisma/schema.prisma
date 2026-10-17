@@ -1071,3 +1071,64 @@ model ReceiptPdfJob {
   @@unique([receiptId, receiptStatus])
   @@index([schoolId, status])
 }
+
+// Append-only operational history for leaving, transfer and readmission. The
+// current Student/Enrollment status remains queryable while this record keeps
+// the dated reason and actor that caused each transition.
+model StudentLifecycleEvent {
+  id                   String   @id @default(uuid())
+  schoolId             String
+  studentId            String
+  enrollmentId         String?
+  eventType            String
+  effectiveDate        DateTime @db.Date
+  reason               String
+  fromStudentStatus    String
+  toStudentStatus      String
+  fromEnrollmentStatus String?
+  toEnrollmentStatus   String?
+  actorId              String
+  metadata             Json?
+  createdAt            DateTime @default(now())
+
+  @@unique([id, schoolId], map: "StudentLifecycleEvent_id_school_unique")
+  @@index([schoolId, studentId, effectiveDate], map: "StudentLifecycleEvent_student_date_idx")
+  @@index([schoolId, eventType, effectiveDate], map: "StudentLifecycleEvent_type_date_idx")
+}
+
+// Import previews are durable, auditable records. Rows are only marked
+// imported after their target write commits in the same transaction.
+model ImportBatch {
+  id          String    @id @default(uuid())
+  schoolId    String
+  kind        String
+  status      String    @default("PREVIEWED")
+  sourceName  String    @default("")
+  reason      String
+  totalRows   Int
+  validRows   Int
+  invalidRows Int
+  createdBy   String
+  committedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([id, schoolId], map: "ImportBatch_id_school_unique")
+  @@index([schoolId, kind, status, createdAt], map: "ImportBatch_scope_idx")
+}
+
+model ImportRow {
+  id         String   @id @default(uuid())
+  schoolId   String
+  batchId    String
+  rowNumber  Int
+  payload    Json
+  status     String   @default("VALID")
+  error      String?
+  entityType String?
+  entityId   String?
+  createdAt  DateTime @default(now())
+
+  @@unique([batchId, rowNumber], map: "ImportRow_batch_row_unique")
+  @@unique([id, schoolId], map: "ImportRow_id_school_unique")
+  @@index([schoolId, batchId, status], map: "ImportRow_batch_status_idx")
+}

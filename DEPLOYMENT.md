@@ -1,6 +1,6 @@
 # Beginner Render deployment guide
 
-**Purpose:** deploy the current Level 4 application in production mode with synthetic data only.
+**Purpose:** deploy the current core-school application in production mode with synthetic data only.
 
 > **Do not use this guide to import the live school database or collect real money.** The demo has financial controls, but production approval, school UAT, external bank/refund settlement, private object storage, backups/restore, printer approval and live migration are still open.
 
@@ -145,7 +145,7 @@ If the selected Render plan exposes **Shell**:
    npm run db:migrate
    ```
 
-4. Confirm that Prisma reports all 14 migrations applied and no pending migrations.
+4. Confirm that Prisma reports all 16 migrations applied and no pending migrations.
 5. Restart the backend service.
 
 ### Alternative method: local terminal with the external database URL

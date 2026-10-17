@@ -23,7 +23,9 @@ import {
   PaymentCorrectionDto,
 } from './dto';
 
-const PAYMENT_MODES = ['CASH', 'MANUAL_ELECTRONIC', 'CHEQUE'] as const;
+const COUNTER_PAYMENT_MODES = ['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE'] as const;
+const LEGACY_PAYMENT_MODES = ['MANUAL_ELECTRONIC'] as const;
+const PAYMENT_MODES = [...COUNTER_PAYMENT_MODES, ...LEGACY_PAYMENT_MODES] as const;
 const PAYMENT_STATUSES = ['PENDING_CHEQUE', 'CAPTURED', 'CLEARED', 'BOUNCED', 'REVERSED', 'PARTIALLY_REFUNDED', 'REFUNDED'];
 const RECEIPT_STATUSES = ['ISSUED', 'VOID', 'PARTIALLY_REFUNDED', 'REFUNDED'];
 
@@ -124,34 +126,34 @@ export class PaymentService {
             businessDate,
             mode: body.mode,
             currency: body.currency ?? 'INR',
-            status: body.mode === 'CHEQUE' ? 'PENDING_CHEQUE' : 'CAPTURED',
+            // Counter collection is a manual recording operation. The selected
+            // method is recorded for reporting, but no external verification or
+            // subsequent cheque-clearance step is required.
+            status: 'CAPTURED',
             receivedAmountMinor: received,
             tenderedAmountMinor: body.tenderedAmountMinor ? minor(body.tenderedAmountMinor) : undefined,
             changeMinor: body.tenderedAmountMinor ? minor(body.tenderedAmountMinor) - received : 0n,
             payerName: body.payerName.trim(),
             payerPhone: body.payerPhone?.trim() ?? '',
             reference: body.reference?.trim() ?? '',
-            electronicChannel: body.electronicChannel ?? '',
-            electronicVerifiedAt: body.mode === 'MANUAL_ELECTRONIC' ? now : undefined,
-            electronicVerifiedBy: body.mode === 'MANUAL_ELECTRONIC' ? actor.id : undefined,
-            electronicVerificationNote: body.mode === 'MANUAL_ELECTRONIC' ? body.electronicVerificationNote!.trim() : undefined,
+            electronicChannel: body.mode === 'UPI' || body.mode === 'BANK_TRANSFER' ? body.mode : body.electronicChannel ?? '',
+            // Legacy verification columns remain nullable for old history. A
+            // manual capture does not manufacture gateway/bank verification.
+            electronicVerifiedAt: undefined,
+            electronicVerifiedBy: undefined,
+            electronicVerificationNote: undefined,
             chequeNumber: body.chequeNumber?.trim() ?? '',
             chequeBank: body.chequeBank?.trim() ?? '',
             chequeDate: body.chequeDate ? asDate(body.chequeDate) : undefined,
-            capturedAt: body.mode === 'CHEQUE' ? undefined : now,
-            captureBusinessDate: body.mode === 'CHEQUE' ? undefined : businessDate,
-            captureShiftId: body.mode === 'CHEQUE' ? undefined : shift.id,
+            capturedAt: now,
+            captureBusinessDate: businessDate,
+            captureShiftId: shift.id,
           },
         });
         await tx.paymentQuote.update({ where: { id: quote.id }, data: { status: 'CONSUMED' } });
-        if (body.mode === 'CHEQUE') {
-          await tx.paymentEvent.create({ data: { schoolId: actor.schoolId, paymentId: payment.id, type: 'CHEQUE_RECEIVED', amountMinor: received, reason: 'Cheque payment recorded pending clearance', actorId: actor.id, businessDate, metadata: toPlanJson(plan) } });
-          await audit(tx, actor, 'CHEQUE_PAYMENT_RECEIVED', 'Payment', payment.id, 'Cheque received pending clearance', undefined, payment);
-          return this.paymentResult(tx, payment.id);
-        }
         await this.applyPlan(tx, actor, payment.id, quote.studentId, plan, 'Payment captured');
         const receipt = await this.issueReceipt(tx, actor, payment, plan);
-        await tx.paymentEvent.create({ data: { schoolId: actor.schoolId, paymentId: payment.id, type: 'PAYMENT_CAPTURED', amountMinor: received, reason: 'Payment captured', actorId: actor.id, businessDate, metadata: toPlanJson(plan) } });
+        await tx.paymentEvent.create({ data: { schoolId: actor.schoolId, paymentId: payment.id, type: 'PAYMENT_CAPTURED', amountMinor: received, reason: 'Payment recorded manually at counter', actorId: actor.id, businessDate, metadata: toPlanJson(plan) } });
         await audit(tx, actor, 'PAYMENT_CAPTURED', 'Payment', payment.id, 'Payment captured and allocated atomically', undefined, { payment, receipt });
         return this.paymentResult(tx, payment.id);
       });
@@ -162,7 +164,6 @@ export class PaymentService {
           if (existing.requestHash !== requestHash) throw new ConflictException('Idempotency-Key was already used with a different payment request');
           return this.db.atomic(tx => this.paymentResult(tx, existing.id));
         }
-        if (body.mode === 'MANUAL_ELECTRONIC') throw new ConflictException('Electronic transaction reference or quote is already recorded for this school and channel');
       }
       throw error;
     }
@@ -197,14 +198,14 @@ export class PaymentService {
     const operation = async (tx: Tx) => {
       const payment = await tx.payment.findFirst({ where: { id, schoolId: actor.schoolId, mode: 'CHEQUE' } });
       if (!payment) throw new BadRequestException('Cheque payment not found');
-      if (!['PENDING_CHEQUE', 'CLEARED'].includes(payment.status)) throw new ConflictException('This cheque cannot be bounced in its current state');
+      if (!['PENDING_CHEQUE', 'CAPTURED', 'CLEARED'].includes(payment.status)) throw new ConflictException('This cheque cannot be bounced in its current state');
       const { businessDate } = await this.correctionContext(tx, actor, payment, body);
       await financialDate(tx, businessDate);
-      if (payment.status === 'CLEARED') await this.releaseAllocations(tx, actor, payment, reason);
+      if (['CAPTURED', 'CLEARED'].includes(payment.status)) await this.releaseAllocations(tx, actor, payment, reason);
       const updated = await tx.payment.update({ where: { id }, data: { status: 'BOUNCED' } });
       await assessBounce(tx, actor, payment, businessDate, reason);
-      if (payment.status === 'CLEARED') await this.updateReceiptStatus(tx, actor, id, 'VOID', reason, 'CHEQUE_BOUNCED');
-      await tx.paymentEvent.create({ data: { schoolId: actor.schoolId, paymentId: id, type: 'CHEQUE_BOUNCED', amountMinor: payment.status === 'CLEARED' ? payment.receivedAmountMinor : 0n, reason, actorId: actor.id, businessDate, metadata: { reference: body.reference?.trim() ?? '' } } });
+      if (['CAPTURED', 'CLEARED'].includes(payment.status)) await this.updateReceiptStatus(tx, actor, id, 'VOID', reason, 'CHEQUE_BOUNCED');
+      await tx.paymentEvent.create({ data: { schoolId: actor.schoolId, paymentId: id, type: 'CHEQUE_BOUNCED', amountMinor: ['CAPTURED', 'CLEARED'].includes(payment.status) ? payment.receivedAmountMinor : 0n, reason, actorId: actor.id, businessDate, metadata: { reference: body.reference?.trim() ?? '' } } });
       await audit(tx, actor, 'CHEQUE_BOUNCED', 'Payment', id, reason, payment, updated);
       return this.paymentResult(tx, id);
     };
@@ -390,7 +391,7 @@ export class PaymentService {
         const pendingMinor = sum(payments.filter(payment => (!mode || payment.mode === mode) && payment.status === 'PENDING_CHEQUE' && (!from || payment.businessDate >= from) && (!to || payment.businessDate <= to)).map(payment => payment.receivedAmountMinor));
         return { capturedMinor, refundedMinor, reversedMinor, bouncedMinor, netCapturedMinor: capturedMinor - refundedMinor - reversedMinor - bouncedMinor, pendingMinor };
       };
-      return jsonSafe({ fromDate: query.fromDate ?? null, toDate: query.toDate ?? null, basis: 'EVENT_BUSINESS_DATE', pendingBasis: 'CURRENT_STATUS_BY_RECEIVED_DATE', cashierBasis: 'ORIGINAL_COLLECTOR', paymentCount: new Set(events.map(event => event.paymentId)).size, ...summarize(), byMode: PAYMENT_MODES.map(mode => ({ mode, ...summarize(mode) })) });
+      return jsonSafe({ fromDate: query.fromDate ?? null, toDate: query.toDate ?? null, basis: 'EVENT_BUSINESS_DATE', pendingBasis: 'CURRENT_STATUS_BY_RECEIVED_DATE', cashierBasis: 'ORIGINAL_COLLECTOR', paymentCount: new Set(events.map(event => event.paymentId)).size, ...summarize(), byMode: [...COUNTER_PAYMENT_MODES, ...LEGACY_PAYMENT_MODES].map(mode => ({ mode, ...summarize(mode) })) });
     });
   }
 
@@ -414,12 +415,7 @@ export class PaymentService {
     if (body.mode === 'CASH' && tendered === undefined) throw new BadRequestException('Cash tendered amount is required');
     if (tendered !== undefined && tendered < received) throw new BadRequestException('Tendered cash cannot be less than the received amount');
     if (body.mode !== 'CASH' && tendered !== undefined && tendered !== received) throw new BadRequestException('Tendered amount is only supported for cash and must equal a non-cash payment');
-    if (body.mode === 'MANUAL_ELECTRONIC' && (!body.reference?.trim() || !body.electronicChannel)) throw new BadRequestException('Electronic channel and transaction reference are required');
-    if (body.mode === 'MANUAL_ELECTRONIC' && (body.electronicVerified !== true || !body.electronicVerificationNote || body.electronicVerificationNote.trim().length < 3)) throw new BadRequestException('Confirm verified receipt of electronic funds and record verification evidence');
-    if (body.mode !== 'MANUAL_ELECTRONIC' && (body.electronicVerified !== undefined || body.electronicVerificationNote !== undefined)) throw new BadRequestException('Electronic verification is only supported for electronic payments');
-    if (body.mode === 'CHEQUE' && (!body.chequeNumber?.trim() || !body.chequeBank?.trim() || !body.chequeDate)) throw new BadRequestException('Cheque number, bank, and cheque date are required');
     if (body.mode !== 'CHEQUE' && (body.chequeNumber || body.chequeBank || body.chequeDate)) throw new BadRequestException('Cheque details are only supported for cheque payments');
-    if (body.mode !== 'MANUAL_ELECTRONIC' && body.electronicChannel) throw new BadRequestException('Electronic channel is only supported for electronic payments');
   }
 
   private async requireStudent(tx: Tx, schoolId: string, studentId: string) {

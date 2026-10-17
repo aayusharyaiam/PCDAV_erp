@@ -5,9 +5,9 @@
 
 ## Current delivery position
 
-Levels 1–3, the first operational transport/store slices, and the synthetic Level 4 demo controls are implemented. Management can review payment quotes, selected/automatic partial balances/credit, store settlement, cash/verified manual electronic/cheque flows, receipt snapshots/PDF jobs, Accountant requests/Admin decisions, balanced journal, cash movements, reports/statements and cashier close. Level 4 is not production-approved: school policy, external settlement, printer/object-storage/worker approval, UAT and recovery remain. Live migration, attendance release, promotion, and withdrawal are still approval-gated. `PROGRESS.md` records current tests and the Render demo next step.
+Levels 1–4, transport/store operations, academic lifecycle, imports and reports are implemented for synthetic review. Management can review partial balances/credit, manual Cash/UPI/Bank transfer/Cheque counter flows, receipt snapshots/PDF jobs, Accountant requests/Admin decisions, attendance/corrections, Promote/Retain, withdrawal/readmission, CSV imports and operational reports. Certificates remain deferred until current ERP samples arrive. Production policy, printer/object-storage/worker approval, UAT, backups and recovery remain.
 
-Level 4 corresponds to the collection-to-receipt and finance-control work in Phase 3 below; level numbers and phase numbers are not interchangeable. The current 76 backend and 34 Level 4 browser tests are developer evidence, not a completed Phase 3 exit or school UAT. Phase windows and the first-week checklist are the original sequencing guidance, not a current forecast or a list of work to redo.
+Level 4 corresponds to the collection-to-receipt and finance-control work in Phase 3 below; level numbers and phase numbers are not interchangeable. The current 82 backend tests are developer evidence, not a completed Phase 3 exit or school UAT. Phase windows and the first-week checklist are the original sequencing guidance, not a current forecast or a list of work to redo.
 
 ## 1. Recommended sequence
 
@@ -22,7 +22,7 @@ Confirm school rules + obtain export samples
   → withdrawal / certificates + promotion batch
   → migration rehearsal + staff UAT
   → final cutover + supported stabilization
-  → remaining ERP modules
+   → certificates from approved samples and remaining ERP modules
 ```
 
 Start data discovery in week 1. Migration, receipt samples, and financial rules should not wait until the UI is finished.

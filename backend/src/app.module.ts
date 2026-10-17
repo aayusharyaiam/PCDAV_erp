@@ -29,9 +29,13 @@ import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
 import { PromotionBatchesController, PromotionDecisionsController } from './promotion.controller';
 import { PromotionService } from './promotion.service';
+import { LifecycleController } from './lifecycle.controller';
+import { LifecycleService } from './lifecycle.service';
+import { ImportsController } from './imports.controller';
+import { ImportsService } from './imports.service';
 
 @Module({
-  controllers: [AuthController, UsersController, AcademicController, AdmissionsController, StudentsController, AuditController, DocumentsController, FeeHeadsController, FeePlansController, AssessmentsController, CreditsController, StudentLedgerController, ServicesController, TransportController, StoreController, PaymentsController, FinancePolicyController, ApprovalController, CashController, ReportsController, AttendanceController, PromotionDecisionsController, PromotionBatchesController, ...RECEIPT_PDF_CONTROLLERS],
-  providers: [Db, StudentAccess, Storage, PaymentService, ApprovalService, CashService, ReportsService, StatementService, AttendanceService, PromotionService, ...RECEIPT_PDF_PROVIDERS, { provide: APP_GUARD, useClass: AuthGuard }],
+  controllers: [AuthController, UsersController, AcademicController, AdmissionsController, StudentsController, LifecycleController, ImportsController, AuditController, DocumentsController, FeeHeadsController, FeePlansController, AssessmentsController, CreditsController, StudentLedgerController, ServicesController, TransportController, StoreController, PaymentsController, FinancePolicyController, ApprovalController, CashController, ReportsController, AttendanceController, PromotionDecisionsController, PromotionBatchesController, ...RECEIPT_PDF_CONTROLLERS],
+  providers: [Db, StudentAccess, Storage, PaymentService, ApprovalService, CashService, ReportsService, StatementService, AttendanceService, PromotionService, LifecycleService, ImportsService, ...RECEIPT_PDF_PROVIDERS, { provide: APP_GUARD, useClass: AuthGuard }],
 })
 export class AppModule {}

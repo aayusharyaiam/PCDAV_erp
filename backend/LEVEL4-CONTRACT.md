@@ -96,8 +96,8 @@ npm test -- --runInBand test/payments.spec.ts test/financial-ledger.spec.ts test
 git diff --check
 ```
 
-- Prisma validation/generation/build/diff checks passed; local migration status reports **13 migrations, up to date**.
-- Full suite: **76 tests / 7 suites passed**. The affected payment/ledger/cash/PDF/approval/report suites and migration backfill checks all passed after final immutable-history guards.
+- Prisma validation/generation/build/diff checks passed; local migration status reports **16 migrations, up to date**.
+- Full suite: **82 tests / 9 suites passed**. The payment/ledger/cash/PDF/approval/report, lifecycle/import and migration suites pass after the manual counter and immutable-history changes.
 - `finance-migration.spec.ts` rehearses upgrade from the original eight migrations with synthetic preexisting receivables, partial settlement, consumed advance/grant evidence, cash and an immutable receipt; it verifies exact opening balances, recovered lineage and queued PDF jobs. It also deploys all migrations into a fresh isolated schema and verifies a second deploy is a no-op.
 - Regression evidence includes exact concurrent approval replay, reject-versus-approve, stale balance/assessment/policy/drawer, policy version races, selected/foreign/cancelled dues, retained cheque selection, once-only bounce assessments, deposit/refund/close races, multi-release assessment-consumed advance, same-student scope, deferred empty/unbalanced journal rejection, immutable journal, persistent lineage and full filtered report totals. The receipt-issuance failure test intentionally logs one simulated database error and verifies payment, quote, balances, audit, journal and PDF job rollback.
 - Test teardown of append-only fixtures requires the **disposable local PostgreSQL test role** to use connection-local `session_replication_role=replica`; application code has no history-deletion path.

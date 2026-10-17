@@ -1,10 +1,10 @@
 # PCDAV ERP implementation progress
 
 **Last updated:** 17 October 2026
-**Documentation revision:** 0.5 — synchronized with the complete demo Level 4 controls and Render deployment guidance
-**Application revisions:** `29d4c44` baseline; current Level 4 completion changes are pending commit/push in this session
+**Documentation revision:** 0.6 — synchronized with academic lifecycle, imports, manual counter collection and Render guidance
+**Application revisions:** academic lifecycle at `2a95b1b`; current core-school workflow changes are pending commit/push in this session
 **Current branch:** `main`
-**Current milestone:** Attendance, correction approval and Promote/Retain lifecycle workflows implemented; Render synthetic-data deployment is active
+**Current milestone:** Core school workflow slice implemented: lifecycle, imports, reports and manual fee-counter collection; Render synthetic-data deployment is active
 
 ## How to resume this project
 
@@ -33,25 +33,28 @@
 - Management feedback was cross-referenced against the authorized live ERP read-only: Transport Mgmt. includes allocation, route/vehicle-driver master records, and route/vehicle/class/month print-list selectors; Store Mgmt. includes groups, products, clusters, vendors, stock/issues, receipts, collections, defaulters, print list, and deleted receipts. No live data was changed.
 - Transport management: route and vehicle masters, driver details, dated student allocations, route/vehicle capacity checks, transport reports, and stop-allocation history.
 - Store management: group/cluster/vendor/product masters, stock receipts, atomic stock movements, low-stock visibility, student item issues, auditable cancellation/stock restoration, and outstanding student issue/defaulter lists.
-- Level 4 demo backend: server quotes with selected fee/store targets, atomic/idempotent payment capture, explicit allocation and credit lineage, partial balances, same-student overpayment credit, cash tender/change, verified manual electronic payments, pending/cleared/bounced cheques, configurable demo policy, immutable receipt snapshots, audited reprints, correction requests/Admin decisions, cash deposits/handovers/expenses, balanced journal, statements, dues/collection/journal reports, and cashier close.
-- Level 4 demo frontend: `/fees/collect`, `/receipts`, `/cashier`, `/finance/requests`, `/finance/policy`, `/reports`, and `/statements`, connected to actual API contracts. Store issues settle through selected/automatic payment allocation; stock receipts remain separate inventory records.
+- Fee-counter backend: server quotes with selected fee/store targets, atomic/idempotent payment capture, explicit allocation and credit lineage, partial balances, same-student overpayment credit, cash tender/change, selectable manual Cash/UPI/Bank transfer/Cheque methods, configurable demo policy, immutable receipt snapshots, audited reprints, correction requests/Admin decisions, cash deposits/handovers/expenses, balanced journal, statements, dues/collection/journal reports, and cashier close. Legacy electronic-verification and pending-cheque records remain readable for compatibility; new counter captures do not require bank verification.
+- Fee-counter frontend: `/fees/collect`, `/receipts`, `/cashier`, `/finance/requests`, `/finance/policy`, `/reports`, and `/statements`, connected to actual API contracts. Store issues settle through selected/automatic payment allocation; stock receipts remain separate inventory records.
 - Academic lifecycle: assigned Teachers can submit daily attendance for every active student, submit immutable correction requests, and record final Promote/Retain decisions. Admin/Superadmin can review correction requests and prepare, validate, and execute capacity-checked next-session promotion batches while preserving enrollment history.
 - Superadmin account management: Superadmin can provision Admin, Accountant and Teacher accounts, reset/deactivate lower accounts, and cannot create or promote another Superadmin.
 - Frontend academic workspace: responsive Attendance, Correction review and Promote/Retain screens with retry-safe writes, loading/error/empty states, keyboard focus states, animations and reduced-motion support.
+- Core school operations: Admin/Superadmin withdrawal and strike-off, transfer/readmission, append-only lifecycle history, dry-run/commit CSV imports for students/transport/store data, admissions/enrollment/transport/store reports, and responsive workflow screens.
+- Fee-counter collection: Cash, UPI, Bank transfer and Cheque are selectable manual methods. Partial balances, overpayment credit, receipts, cashier totals and ledger history remain server-controlled. No payment gateway or bank API is integrated.
 - Receipt PDF jobs now run durably inside the API for the small synthetic demo, store private bytes in PostgreSQL, support lease/retry/status/download, and render the current receipt status. Unsupported Devanagari/combining text is rejected rather than corrupted; physical printer approval remains open.
 - Safety checks include stale quote/policy/selection rejection, concurrent settlement/approval/refund/deposit limits, receipt/journal/PDF rollback, append-only financial history, credit lineage, duplicate electronic-reference prevention, verification evidence, and frozen command/key recovery after ambiguous responses.
-- Existing Level 3/transport/store changes were preserved and combined with the recovered Level 4 demo implementation. The documentation refresh covers the project Markdown files, the coordination contract at `backend/LEVEL4-CONTRACT.md`, deployment guidance at `DEPLOYMENT.md`, and the generated management Word report without modifying historical legacy observations.
+- Existing Level 3/transport/store changes were preserved and combined with the academic lifecycle, lifecycle/import, manual-counter and report implementations. Certificates remain deferred pending current ERP samples.
 
 ## Verified
 
 - `backend` TypeScript/NestJS build passes.
 - `frontend` Next.js production build passes.
-- Prisma schema validation passes for the 14-migration deployment path. The latest migration adds attendance, correction approval and Promote/Retain lifecycle records; deployment against a live disposable PostgreSQL database remains to be rerun.
-- `npm test -- --runInBand` passes: 76 tests across seven backend suites. Financial tests cover capture/refund retries, approval/cash races, selected dues, configurable policy, journal/credit lineage, append-only guards, statements/reports, PDF generation/retry/status and existing workflows.
+- Prisma schema validation and local migration status pass for the 16-migration deployment path. The latest migrations add manual counter method compatibility and lifecycle/import records.
+- `npm test -- --runInBand` passes: 82 tests across nine backend suites, including lifecycle/import/report and manual counter payment coverage.
 - `/health` responds with `{ "status": "ok" }` when API and database are ready.
 - Frontend and backend production builds pass for the current staging implementation.
 - Earlier Level 1–3 browser checks passed for desktop/mobile navigation and the original workspaces. Those six seed-account browser scenarios were not rerun in this recovery session.
-- Current Level 4 browser checks: 34 passed — 33 mocked API contract tests and one live Next → API → PostgreSQL test. The live test provisions a synthetic school, collects cash, deposits, requests and Admin-approves a refund, checks report/journal/statement reconciliation, generates a current receipt PDF path and closes the shift. Immutable synthetic history is retained with fixture accounts disabled because append-only guards intentionally prevent destructive test teardown.
+- The frontend TypeScript check and production build pass. The existing browser contract fixtures were updated for the simplified manual-counter methods; the full browser contract run is the remaining check before this commit.
+- The browser contract run was attempted but could not launch because this environment does not have the Playwright Chromium binary installed. Run `npx playwright install chromium` on a machine with browser-download access, then rerun the contract suite.
 - Backend build, frontend production build, frontend app/test TypeScript checks and PDF/backend suites pass. Standalone lint remains unconfigured (`next lint` requests interactive setup). PDF content is developer-verified; physical printer output, school UAT, external bank/refund settlement and production recovery remain open.
 - Documentation source and Word artifact are kept together: edit `school-review-report.md`, run `npm --prefix tools run build-school-report`, then validate the generated `PCDAV_school_ERP_school_review_report.docx` before committing.
 - Current management DOCX validation passes: 22 ZIP parts, XML and internal relationships valid, all 301 source-text fragments present, 19,233 extracted text characters. Run `python3 tools/validate-school-report.py` after regeneration. This is a management artifact, separate from the synthetic receipt PDF worker.
@@ -68,22 +71,21 @@
 
 ## Not yet implemented or not production-approved
 
-- External bank/gateway/refund execution and settlement matching; manual electronic verification is evidence only
+- External bank/gateway/refund execution and settlement matching are intentionally out of scope for fee-counter collection; manual UPI/bank-transfer entries are recorded as staff-entered methods.
 - Production-approved financial rules, receipt series, old-session policy, bounce fee, live rates and school authority sign-off
 - Devanagari-capable/office-approved receipt fonts and physical printer approval
 - Production object storage for documents, managed worker separation, backups/restore and deployment monitoring
 - Full statutory/management report acceptance and school UAT
-- Transport import/migration of the live school's route and student allocation master data
-- Store import/migration of the live school's products, quantities, vendors, and historical student balances
-- Store-specific financial reports/print formats (shared payment capture, receipt snapshots and void/refund history are now implemented)
-- Reports, certificates, withdrawal, and live-data migration
+- Live-data import/migration rehearsal and production reconciliation
+- Certificate screens/templates (waiting for current ERP samples)
+- School-approved report definitions and statutory formats
 - Background worker for future financial/document jobs
 
 ## Next milestone
 
-Deploy the current demo safely to Render with a separate frontend Web Service, backend Web Service and PostgreSQL database. Run the synthetic browser flow, then guide manual acceptance of admissions, students, fee plans, transport, store, collection, approvals, statements, reports, PDFs and cashier close. Only after that should attendance/promotion/lifecycle work or production financial policy be considered.
+Deploy the current core-school slice safely to Render with a separate frontend Web Service, backend Web Service and PostgreSQL database. Apply all 16 migrations, run the synthetic browser flow, then guide manual acceptance of admissions, students, lifecycle, fee plans, transport, store, imports, collection, receipts, attendance, promotion, approvals, statements and reports.
 
-Current demo defaults: automatic/selected oldest-due fee/store allocation, existing credit applied to eligible fees, one shift per cashier/business date, manual verification rather than bank integration, configurable bounce fee default `₹0`, configurable receipt prefix/scope default `DEMO/FEE/SCHOOL`, and PostgreSQL-backed PDF job bytes. These are not signed school financial rules. APP_MODE=demo disables document uploads unless private S3 storage is configured.
+Current demo defaults: automatic/selected oldest-due fee/store allocation, existing credit applied to eligible fees, one shift per cashier/business date, manual counter methods (Cash/UPI/Bank transfer/Cheque), configurable receipt prefix/scope default `DEMO/FEE/SCHOOL`, and PostgreSQL-backed PDF job bytes. These are not signed school financial rules. APP_MODE=demo disables document uploads unless private S3 storage is configured.
 
 ## Commit history for continuation
 

@@ -375,15 +375,19 @@ export class PaymentDto {
   @IsInt() @Min(1) @Max(2147483647) quoteVersion!: number;
   @Matches(/^\d{1,19}$/) receivedAmountMinor!: string;
   @IsDateString({ strict: true }) businessDate!: string;
-  @IsIn(['CASH', 'MANUAL_ELECTRONIC', 'CHEQUE']) mode!: string;
+  // MANUAL_ELECTRONIC remains accepted for old clients and existing command
+  // payloads. New counter captures should use the explicit manual methods.
+  @IsIn(['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'MANUAL_ELECTRONIC']) mode!: string;
   @IsOptional() @IsIn(['INR']) currency = 'INR';
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @Length(2, 150) payerName!: string;
   @IsOptional() @Matches(/^[+0-9 ()-]{7,25}$/) payerPhone?: string;
   @IsOptional() @IsString() @MaxLength(150) reference?: string;
   @IsOptional() @IsIn(['UPI', 'BANK_TRANSFER', 'CARD', 'OTHER']) electronicChannel?: string;
-  @ValidateIf(body => body.mode === 'MANUAL_ELECTRONIC' || body.electronicVerified !== undefined) @IsBoolean() @IsIn([true]) electronicVerified?: boolean;
-  @ValidateIf(body => body.mode === 'MANUAL_ELECTRONIC' || body.electronicVerificationNote !== undefined)
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @Length(3, 500) electronicVerificationNote?: string;
+  // These fields are retained only so older clients can be retired without
+  // making their payloads invalid. They are optional and are never required
+  // or used to verify a new counter capture.
+  @IsOptional() @IsBoolean() electronicVerified?: boolean;
+  @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @Length(3, 500) electronicVerificationNote?: string;
   @IsOptional() @Matches(/^\d{1,19}$/) tenderedAmountMinor?: string;
   @IsOptional() @IsString() @Length(3, 80) chequeNumber?: string;
   @IsOptional() @IsString() @Length(2, 150) chequeBank?: string;
@@ -424,7 +428,7 @@ export class PaymentListDto {
   @IsOptional() @IsString() @MaxLength(100) q?: string;
   @IsOptional() @IsString() @MaxLength(100) cashierId?: string;
   @IsOptional() @IsString() @MaxLength(30) status?: string;
-  @IsOptional() @IsIn(['CASH', 'MANUAL_ELECTRONIC', 'CHEQUE']) mode?: string;
+  @IsOptional() @IsIn(['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'MANUAL_ELECTRONIC']) mode?: string;
   @IsOptional() @IsString() @Length(1, 100) studentId?: string;
   @IsOptional() @IsString() @MaxLength(80) receiptNumber?: string;
   @IsOptional() @IsIn(['ISSUED', 'VOID', 'PARTIALLY_REFUNDED', 'REFUNDED']) receiptStatus?: string;
@@ -436,6 +440,61 @@ export class PaymentListDto {
 export class CollectionReportDto {
   @IsOptional() @IsDateString({ strict: true }) fromDate?: string;
   @IsOptional() @IsDateString({ strict: true }) toDate?: string;
-  @IsOptional() @IsIn(['CASH', 'MANUAL_ELECTRONIC', 'CHEQUE']) mode?: string;
+  @IsOptional() @IsIn(['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'MANUAL_ELECTRONIC']) mode?: string;
   @IsOptional() @IsString() cashierId?: string;
+}
+
+export class StudentLifecycleDto {
+  @IsOptional() @IsString() @Length(1, 100) enrollmentId?: string;
+  @IsOptional() @IsIn(['WITHDRAWN', 'STRUCK_OFF', 'TRANSFERRED', 'READMITTED']) eventType?: string;
+  @IsDateString({ strict: true }) effectiveDate!: string;
+  @IsString() @Length(3, 500) reason!: string;
+  @IsInt() @Min(1) version!: number;
+}
+
+export class StudentTransferDto {
+  @IsOptional() @IsString() @Length(1, 100) sourceEnrollmentId?: string;
+  @IsString() @Length(1, 100) targetSessionId!: string;
+  @IsString() @Length(1, 100) targetClassId!: string;
+  @IsDateString({ strict: true }) startDate!: string;
+  @IsOptional() @IsString() @Length(1, 50) feeCategory?: string;
+  @IsOptional() @IsBoolean() ews?: boolean;
+  @IsString() @Length(3, 500) reason!: string;
+}
+
+export class StudentReadmissionDto {
+  @IsString() @Length(1, 100) targetSessionId!: string;
+  @IsString() @Length(1, 100) targetClassId!: string;
+  @IsDateString({ strict: true }) startDate!: string;
+  @IsOptional() @IsString() @Length(1, 50) feeCategory?: string;
+  @IsOptional() @IsBoolean() ews?: boolean;
+  @IsString() @Length(3, 500) reason!: string;
+}
+
+export class ReportQueryDto {
+  @Type(() => Number) @IsInt() @Min(1) page = 1;
+  @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 25;
+  @IsOptional() @IsString() @Length(1, 100) sessionId?: string;
+  @IsOptional() @IsString() @Length(1, 100) classId?: string;
+  @IsOptional() @IsString() @Length(1, 30) status?: string;
+  @IsOptional() @IsString() @Length(1, 50) entryType?: string;
+  @IsOptional() @IsString() @Length(1, 100) routeId?: string;
+  @IsOptional() @IsString() @Length(1, 100) vehicleId?: string;
+  @IsOptional() @IsIn(['TRANSPORT', 'STORE']) area?: string;
+  @IsOptional() @IsString() @Matches(/^\d{4}-(0[1-9]|1[0-2])$/) month?: string;
+  @IsOptional() @IsDateString({ strict: true }) fromDate?: string;
+  @IsOptional() @IsDateString({ strict: true }) toDate?: string;
+}
+
+export class CsvImportDto {
+  @IsOptional() @IsString() @MaxLength(5_000_000) csv?: string;
+  @IsOptional() @IsBoolean() dryRun = true;
+  @IsOptional() @IsString() @MaxLength(150) sourceName = '';
+  @IsString() @Length(3, 500) reason!: string;
+}
+
+// The explicit commit endpoint accepts only a reviewed preview id.
+export class ImportCommitDto {
+  @IsString() @Length(1, 100) batchId!: string;
+  @IsString() @Length(3, 500) reason!: string;
 }

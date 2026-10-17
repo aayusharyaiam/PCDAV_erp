@@ -68,7 +68,7 @@ describe('Level 4 demo financial controls', () => {
     expect((await f.statement(student.studentId)).totals.journal.reconciled).toBe(true);
   });
 
-  it('stales cancelled store selections and preserves explicit selection at cheque clearance', async () => {
+  it('stales cancelled store selections and allocates an explicit cheque selection at capture', async () => {
     const student = await f.student();
     const issue = await f.db.storeIssue.create({ data: { schoolId: f.schoolId, ...student, issueNumber: randomUUID(), issuedAt: new Date('2026-03-01'), totalMinor: 100n, reason: 'Cancel selected store issue', createdBy: f.admin.id } });
     const stale = await f.quote(student.studentId, '100', { obligationIds: [], storeIssueIds: [issue.id] });
@@ -77,16 +77,13 @@ describe('Level 4 demo financial controls', () => {
     expect((await f.statement(student.studentId)).totals.journal.reconciled).toBe(true);
     const excluded = await f.fee(student, 1000n, '2026-04-01'); const selected = await f.fee(student, 500n, '2026-05-01');
     const quote = await f.quote(student.studentId, '500', { obligationIds: [selected.id], storeIssueIds: [] });
-    const pending = (await f.client(f.accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send({ quoteId: quote.id, quoteVersion: 1, receivedAmountMinor: '500', businessDate: f.date, mode: 'CHEQUE', payerName: 'Selected cheque guardian', chequeNumber: randomUUID(), chequeBank: 'Demo bank', chequeDate: f.date }).expect(201)).body;
-    const settled = await f.quote(student.studentId, '500', { obligationIds: [selected.id], storeIssueIds: [] });
-    await f.client(f.accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send(f.electronicBody(settled)).expect(201);
-    const cleared = (await f.client(f.accountant, 'post', `/payments/${pending.payment.id}/clear-cheque`).send({ businessDate: f.date, reason: 'Selection retained after intervening payment' }).expect(201)).body;
-    expect(cleared.allocations).toEqual([]); expect(cleared.overpaymentCredit.remainingMinor).toBe('500');
+    const captured = (await f.client(f.accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send({ quoteId: quote.id, quoteVersion: 1, receivedAmountMinor: '500', businessDate: f.date, mode: 'CHEQUE', payerName: 'Selected cheque guardian' }).expect(201)).body;
+    expect(captured.payment.status).toBe('CAPTURED'); expect(captured.allocations[0].targetId).toBe(selected.id); expect(captured.allocations[0].amountMinor).toBe('500');
     expect((await f.db.feeObligation.findUniqueOrThrow({ where: { id: excluded.id } })).paidMinor).toBe(0n);
     expect((await f.statement(student.studentId)).totals.journal.reconciled).toBe(true);
   });
 
-  it('requires a fresh quote when selected dues settle before a cheque is recorded', async () => {
+  it('requires a fresh quote when selected dues settle before a manual cheque capture', async () => {
     const student = await f.student();
     const selected = await f.fee(student, 500n, '2026-04-05');
     const pendingQuote = await f.quote(student.studentId, '500', { obligationIds: [selected.id], storeIssueIds: [] });

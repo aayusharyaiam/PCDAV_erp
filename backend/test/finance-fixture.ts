@@ -70,14 +70,14 @@ export class FinanceFixture {
   async quote(studentId: string, amountMinor: string, extra = {}) {
     return (await this.client(this.accountant, 'post', '/payment-quotes').send({ studentId, amountMinor, ...extra }).expect(201)).body;
   }
-  electronicBody(quote: any, extra = {}) { return { quoteId: quote.id, quoteVersion: quote.version, receivedAmountMinor: quote.amountMinor, businessDate: this.date, mode: 'MANUAL_ELECTRONIC', payerName: 'Synthetic guardian', electronicChannel: 'UPI', reference: randomUUID(), electronicVerified: true, electronicVerificationNote: 'Synthetic verified demo funds', ...extra }; }
+  electronicBody(quote: any, extra = {}) { return { quoteId: quote.id, quoteVersion: quote.version, receivedAmountMinor: quote.amountMinor, businessDate: this.date, mode: 'UPI', payerName: 'Synthetic guardian', ...extra }; }
   async capture(studentId: string, amountMinor = '1000', extra = {}) {
     const quote = await this.quote(studentId, amountMinor);
     return (await this.client(this.accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send(this.electronicBody(quote, extra)).expect(201)).body;
   }
   async cheque(studentId: string, amountMinor = '1000') {
     const quote = await this.quote(studentId, amountMinor);
-    return (await this.client(this.accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send({ quoteId: quote.id, quoteVersion: quote.version, receivedAmountMinor: amountMinor, businessDate: this.date, mode: 'CHEQUE', payerName: 'Cheque guardian', chequeNumber: randomUUID(), chequeBank: 'Demo Bank', chequeDate: this.date }).expect(201)).body;
+    return (await this.client(this.accountant, 'post', '/payments').set('Idempotency-Key', randomUUID()).send({ quoteId: quote.id, quoteVersion: quote.version, receivedAmountMinor: amountMinor, businessDate: this.date, mode: 'CHEQUE', payerName: 'Cheque guardian' }).expect(201)).body;
   }
   async open(actor = this.accountant, businessDate = this.date, openingFloatMinor = '1000') { return (await this.client(actor, 'post', '/cashier-shifts').send({ businessDate, openingFloatMinor }).expect(201)).body; }
   async request(paymentId: string, extra = {}) { return (await this.client(this.accountant, 'post', '/finance/requests').set('Idempotency-Key', randomUUID()).send({ paymentId, type: 'REFUND', amountMinor: '100', businessDate: this.date, reason: 'Exact synthetic refund request', ...extra }).expect(201)).body; }

@@ -1,6 +1,6 @@
 # Product Requirements Document — improved school ERP
 
-**Version:** 0.5, revised 14 October 2026 (legacy audit: 4 October 2026)
+**Version:** 0.6, revised 17 October 2026 (legacy audit: 4 October 2026)
 
 **Status:** target product contract with a verified synthetic Level 4 demo subset; financial release, school UAT and production policies remain open
 **Evidence:** [feature-audit.md](feature-audit.md), [reference-data.md](reference-data.md)
@@ -11,14 +11,14 @@ This PRD describes the required release, not a claim that every requirement is c
 
 | Requirement area | Implemented staging behavior | Remaining release criteria |
 |---|---|---|
-| Foundation/admissions/students | Four-role access, enrollment, unique admission numbers, history, academic setup, documents and audit | Full approval inbox/notifications, operational UAT and later lifecycle actions |
+| Foundation/admissions/students | Four-role access, enrollment, unique admission numbers, history, academic setup, documents, audit, withdrawal/transfer/readmission and lifecycle history | Operational UAT, certificates from approved samples and live migration |
 | FEE-01–FEE-05 / SRV | Versioned heads/plans, periodic assessment, balances/credit, dated hostel/transport, transport masters and store inventory/issues | Complete concession/fine policies, production rate approval and live import |
-| PAY-01–PAY-04 | Server quote, automatic or selected fee/store allocation, partial/advance payment, cash change, verified manual electronic capture, cheque pending/clear/bounce, retry/concurrency protection and configurable demo policy | Approved old-session/rate rules, external bank/refund settlement and production policy sign-off |
+| PAY-01–PAY-04 | Server quote, automatic or selected fee/store allocation, partial/advance payment, cash change, selectable manually recorded Cash/UPI/Bank transfer/Cheque methods, retry/concurrency protection and configurable demo policy | Approved old-session/rate rules and production policy sign-off; no gateway or bank API is planned for counter collection |
 | PAY-05–PAY-06 | Immutable numbered receipt snapshots, browser reprint audit, Accountant request/Admin decision, idempotent corrections/refunds, current-status PDF jobs and download/retry/status | Approved receipt series/font/printer, object-storage worker and bank/refund settlement matching |
 | REP-01–REP-02 | Receipt register, student statements, fee/store dues, collection/journal reports, opening float, cash movements, counted cash and variance close | School-approved report definitions, backups/recovery and full statutory/management acceptance |
-| Attendance/lifecycle/migration | Role and enrollment foundations available | Teacher attendance/corrections/Promote-Retain, withdrawal/certificates, promotion batches, migration and go-live controls |
+| Attendance/lifecycle/migration | Teacher attendance/corrections/Promote-Retain, promotion batches, withdrawal/transfer/readmission, CSV imports and operational reports | Certificate templates/samples, live migration rehearsal and go-live controls |
 
-Evidence on 14 October 2026: 76 backend integration tests across seven suites and 34 Level 4 browser tests passed (33 mocked contracts + one live synthetic flow), alongside builds/typechecks/13 migrations. These do not constitute school approval, external settlement, physical PDF/printer validation or production readiness. Requirement IDs and acceptance criteria below remain the target; demo defaults do not replace unresolved decisions D06/D07/D12.
+Evidence on 17 October 2026: 82 backend integration tests across nine suites passed, alongside backend/frontend builds, typechecks and 16 migrations. These do not constitute school approval, physical PDF/printer validation, certificate approval, live migration or production readiness. Requirement IDs and acceptance criteria below remain the target.
 
 ## 1. Product objective
 

@@ -30,6 +30,29 @@
 .approval-notification { margin:12px 0 22px; }
 .report-entry { padding:16px 0; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
 .report-entry summary { cursor:pointer; font-weight:600; }
+.button-group { display:flex; flex-wrap:wrap; gap:9px; align-items:center; }
+.selected-student-card { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px; border:1px solid #cfe3f1; border-radius:9px; background:#f5fbff; }
+.selected-student-card strong,.selected-student-card small { display:block; }
+.selected-student-card strong { font:700 16px Manrope; margin-top:3px; }
+.selected-student-card small { color:var(--muted); margin-top:5px; }
+.lifecycle-choice-grid { grid-template-columns:repeat(2, minmax(0,1fr)); margin-bottom:4px; }
+.collection-method-grid { grid-template-columns:repeat(4, minmax(0,1fr)); }
+.receipt-success { border-color:#bfe4d3; }
+.import-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:18px; margin-top:18px; }
+.import-card { display:flex; flex-direction:column; }
+.import-card > form { display:grid; gap:14px; }
+.import-card .empty-state { margin-top:auto; padding-bottom:10px; }
+.import-fields { margin-top:2px; min-height:64px; }
+.import-fields strong { font-size:11px; line-height:16px; font-weight:500; overflow-wrap:anywhere; }
+.import-result { border-top:1px solid var(--line); margin-top:20px; padding-top:16px; }
+.import-result .panel-header { margin-bottom:8px; }
+.import-result .money-summary { margin-top:8px; }
+.import-errors { margin-top:12px; padding:11px 13px; border:1px solid #f2d1d1; border-radius:7px; background:#fceded; color:#a13d3d; font-size:11px; }
+.import-errors p { margin:6px 0 0; }
+.report-toolbar { padding-bottom:16px; }
+.report-tabs { margin-bottom:0; }
+.enrollment-filters { grid-template-columns:repeat(4, minmax(0,1fr)) auto; }
+.enrollment-filters .button { align-self:end; }
 .pdf-panel { padding:16px 0; margin:14px 0; border-block:1px solid var(--line); }
 .statement-fields { margin:12px 0; } .statement-fields > div { display:grid; grid-template-columns:minmax(110px, 180px) minmax(0,1fr); gap:12px; padding:5px 0; } .statement-fields dt { color:var(--muted); } .statement-fields dd { margin:0; overflow-wrap:anywhere; }
 @media (max-width:700px) { .statement-fields > div { grid-template-columns:1fr; gap:3px; } }
@@ -88,5 +111,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .validation-list { display:grid; gap:0; }
 @keyframes content-enter { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
 @media (max-width:850px) { .workspace-filters { grid-template-columns:1fr 1fr; } .workspace-filters > :last-child { grid-column:1/-1; justify-self:start; } .compact-stats { grid-template-columns:repeat(2,1fr); } }
-@media (max-width:700px) { .workspace-filters,.classroom-stats,.compact-stats { grid-template-columns:1fr; } .workspace-footer,.promotion-toolbar,.mapping-preview,.workspace-error,.pending-command { align-items:stretch; flex-direction:column; } .promotion-toolbar .input { max-width:none; } .before-after { grid-template-columns:1fr; } .before-after-arrow { transform:rotate(90deg); justify-self:center; } .decision-toggle { flex-direction:column; } .attendance-table td:first-child,.promotion-table td:first-child { min-width:155px; } .data-table-wrap { margin-inline:-4px; } }
+@media (max-width:850px) { .import-grid { grid-template-columns:1fr 1fr; } .collection-method-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } .enrollment-filters { grid-template-columns:1fr 1fr; } }
+@media (max-width:700px) { .workspace-filters,.classroom-stats,.compact-stats { grid-template-columns:1fr; } .workspace-footer,.promotion-toolbar,.mapping-preview,.workspace-error,.pending-command { align-items:stretch; flex-direction:column; } .promotion-toolbar .input { max-width:none; } .before-after { grid-template-columns:1fr; } .before-after-arrow { transform:rotate(90deg); justify-self:center; } .decision-toggle { flex-direction:column; } .attendance-table td:first-child,.promotion-table td:first-child { min-width:155px; } .data-table-wrap { margin-inline:-4px; } .selected-student-card { align-items:stretch; flex-direction:column; } .lifecycle-choice-grid,.collection-method-grid,.import-grid,.enrollment-filters { grid-template-columns:1fr; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; transition-duration:.01ms !important; } }

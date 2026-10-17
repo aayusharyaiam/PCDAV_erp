@@ -53,6 +53,7 @@ export class StudentsController {
     return { student, family, guardians, siblings, enrollments: history,
       documents: admin ? await this.db.document.findMany({ where: { schoolId: actor.schoolId, studentId: id }, select: { id: true, type: true, originalName: true, verifiedAt: true, createdAt: true } }) : [],
       timeline: admin ? await this.db.auditEvent.findMany({ where: { schoolId: actor.schoolId, entityId: id }, orderBy: { createdAt: 'desc' }, take: 100 }) : [],
+      lifecycleEvents: admin ? await this.db.studentLifecycleEvent.findMany({ where: { schoolId: actor.schoolId, studentId: id }, orderBy: [{ effectiveDate: 'desc' }, { createdAt: 'desc' }] }) : [],
       applications: admin ? await this.db.application.findMany({ where: { studentId: id, schoolId: actor.schoolId } }) : [],
     };
   }

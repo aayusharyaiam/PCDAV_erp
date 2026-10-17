@@ -2,7 +2,7 @@
 
 The frontend is a Next.js + React + TypeScript staff workspace. It is deliberately separate from `backend/` for independent Render deployment.
 
-**Documentation revision:** 0.5 — 14 October 2026. This is a synthetic-data demo implementation, not an approved production payment release. The complete target screens remain in `../design.md`; current acceptance gaps and next work are in `../PROGRESS.md` and `../DEPLOYMENT.md`.
+**Documentation revision:** 0.6 — 17 October 2026. This is a synthetic-data deployment, not an approved production release. The complete target screens remain in `../design.md`; current acceptance gaps and next work are in `../PROGRESS.md` and `../DEPLOYMENT.md`.
 
 ## Local setup
 
@@ -14,7 +14,7 @@ npm run dev
 
 Open `http://localhost:3000`. Browser API calls use same-origin `/api/v1` routes; Next.js proxies them to `API_INTERNAL_URL` (default `http://127.0.0.1:4000`) so session cookies and CSRF checks remain same-origin.
 
-## Implemented levels 1–3 and Level 4 demo slice
+## Implemented levels 1–4 and core school workflows
 
 - Staff sign-in and forced first-login password change.
 - Role-aware navigation for Superadmin, Admin, Accountant, and Teacher.
@@ -30,7 +30,7 @@ Open `http://localhost:3000`. Browser API calls use same-origin `/api/v1` routes
 - Dated transport/hostel service-assignment workspace.
 - Transport management workspace with route/vehicle masters, driver details, student allocation, capacity validation feedback, and operational report filters.
 - Store management workspace with group/vendor/product masters, stock receipts, inventory counts, student item issues, cancellations, low-stock visibility, and open issue balances.
-- Payment collection with server-controlled or explicitly selected fee/store allocation, partial payments and advance credit, cash change, manual electronic and cheque modes, and frozen-payload idempotent retries across reloads. Manual electronic capture requires explicit verification and evidence; a rejected retry cannot discard an earlier uncertain payment.
+- Payment collection with server-controlled or explicitly selected fee/store allocation, partial payments and advance credit, cash change, selectable manual Cash/UPI/Bank transfer/Cheque methods, and frozen-payload idempotent retries across reloads. There is no payment gateway or bank API.
 - Receipt register with immutable school/student/payer/allocation snapshots, reasoned reprint events, current-status PDF jobs and download/retry/status actions. Accountants submit correction requests; Admin/Superadmin decisions apply exact corrections once. Accountants can clear cheques; direct bounce/reversal/refund remains Admin/Superadmin-only.
 - Cashier shift opening for all payment modes, server expected-cash review, deposits, handovers, Admin expenses, counted cash, and reasoned variance close. Only the cashier or Admin/Superadmin can close a shift.
 - Finance request inbox, versioned demo policy editor, fee/store selection, student statements, dues/collection/journal reports, and role-aware Level 4 navigation.
@@ -40,7 +40,8 @@ Open `http://localhost:3000`. Browser API calls use same-origin `/api/v1` routes
 
 - Production-approved financial rules, external bank/refund settlement, private object storage, physical printer/font approval, full school UAT, backups/restore and live migration. The current PDF path is a synthetic demo worker backed by PostgreSQL bytes, not the final production object-storage worker.
 - Attendance, correction approval and Promote/Retain screens are available under `/attendance` and `/promotion`.
-- Withdrawal, certificates, migration, parent/gateway views, and remaining statutory/management reports.
+- Withdrawal/strike-off, transfer/readmission, CSV imports, enrollment/admission reports and store operational reports are available under `/lifecycle`, `/imports` and `/reports`.
+- Certificates are intentionally deferred until current ERP samples are provided. Parent/gateway views and remaining statutory formats are also deferred.
 
 Store issues are included automatically in oldest-due payment allocation. The quote accepts only student and amount; it does not support selecting individual balances. Stock receipts are inventory receipts and are not payment receipts.
 
@@ -76,7 +77,7 @@ npm run test:e2e -- --list
 PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome npm run test:e2e -- tests/level-4-contracts.spec.ts --workers=1
 ```
 
-`tests/level-4-contracts.spec.ts` uses the real UI with mocked responses based on the backend DTOs/controllers/services and Prisma models. It asserts exact request bodies, quote selection/policy rendering, cash/electronic/cheque posting, identical payload/key retries after reload and expiry, advance credit, stale quote/policy rejection, immutable receipt snapshots, reprint/PDF actions, role-sensitive correction requests, policy editing, reports/statements, payout movements and cashier opening/closing. It also checks pagination. These tests do not establish live backend/database integration or verify physical print output; the print dialog is stubbed to verify audit-before-print ordering.
+`tests/level-4-contracts.spec.ts` uses the real UI with mocked responses based on the backend DTOs/controllers/services and Prisma models. It asserts exact request bodies, quote selection/policy rendering, manual Cash/UPI/Bank transfer/Cheque posting, identical payload/key retries after reload and expiry, advance credit, stale quote/policy rejection, immutable receipt snapshots, reprint/PDF actions, role-sensitive correction requests, policy editing, reports/statements, payout movements and cashier opening/closing. It also checks pagination. These tests do not establish live backend/database integration or verify physical print output.
 
 ### Level 4 live browser smoke test (opt-in)
 
@@ -88,7 +89,7 @@ E2E_DATABASE_URL='postgresql://pcdav:pcdav_local@localhost:5433/pcdav?schema=pub
   npm run test:e2e -- tests/level-4-live.spec.ts tests/level-4-contracts.spec.ts --workers=1
 ```
 
-The combined Level 4 suites pass 34 tests (33 mocked contracts + 1 live smoke). `level-4-live.spec.ts` provisions a generated Accountant and synthetic school/student/fee/store balance, signs in through the actual browser, collects cash, deposits/handovers cash, submits and approves a correction, verifies reports/journal/statement reconciliation, exercises the receipt PDF path and closes the shift. Because financial history is append-only, the latest run retains synthetic financial history and disables its generated fixture accounts instead of deleting immutable records. It refuses non-local database hosts and skips unless `E2E_DATABASE_URL` is explicitly set. No existing staff password or seed changes are needed; physical printing remains unverified.
+The live smoke flow provisions a generated Accountant and synthetic school/student/fee/store balance, signs in through the actual browser, collects cash, deposits/handovers cash, submits and approves a correction, verifies report/journal/statement reconciliation, exercises the receipt PDF path and closes the shift. Browser tests require a local Playwright Chromium binary; install it with `npx playwright install chromium` when browser-download access is available. Because financial history is append-only, synthetic runs retain generated history and disable fixture accounts instead of deleting immutable records. The live test refuses non-local database hosts and skips unless `E2E_DATABASE_URL` is explicitly set. Physical printing remains unverified.
 
 ## Render service notes
 

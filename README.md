@@ -1,7 +1,7 @@
 # PCDAV School ERP — discovery and implementation documents
 
 **Prepared:** 4 October 2026  
-**Revised:** 14 October 2026 — version 0.5
+**Revised:** 17 October 2026 — version 0.6
 **Existing portal:** <https://pdav.webanlytic.in/software/login/index>  
 **School name displayed by the portal:** P DAV PUBLIC SCHOOL / PDAV PUBLIC SCHOOL  
 **Project folder:** repository root
@@ -60,11 +60,12 @@ The staging prototype currently demonstrates:
 - Fee heads, versioned fee plans, assessment previews, outstanding balances, and student credit rules.
 - Hostel/transport service charges plus a separate Transport Management workspace for routes, vehicles, drivers, student allocation, capacity, and reports.
 - A Store Management workspace for groups, clusters, vendors, products, stock receipts, inventory, student issues, cancellations, and open balances.
-- Level 4 collection, receipt register, cashier, finance-request, policy, reports, and statement workspaces: partial cash/manual-verified electronic/cheque payments, selected fee/store settlement, student credit lineage, immutable receipt snapshots, Accountant requests/Admin decisions, deposits/handovers/expenses, balanced journal, current-status PDF jobs, and cashier reconciliation.
+- Fee-counter collection, receipt register, cashier, finance-request, policy, reports, and statement workspaces: partial payments, overpayment credit, selectable manual Cash/UPI/Bank transfer/Cheque methods, selected fee/store settlement, immutable receipt snapshots, Accountant requests/Admin decisions, deposits/handovers/expenses, balanced journal, current-status PDF jobs, and cashier reconciliation. No payment gateway or bank API is used.
+- Student lifecycle and operations: withdrawal/strike-off, transfer/readmission, append-only lifecycle history, synthetic CSV previews/imports for students/transport/store masters and opening stock, enrollment/admission reports, and store operational reports.
 
-**The Level 4 demo implementation is complete for synthetic-data review, but it is not production-approved.** Production policy sign-off, external bank/refund settlement, printer/font approval, private object storage, backup/recovery, live migration, attendance and promotion/withdrawal releases remain. Do not use the demo build to collect real money. See `PROGRESS.md` for the exact verified scope and `DEPLOYMENT.md` for the Render demo boundary; the Markdown and Word management reports describe the same boundary.
+**The synthetic deployment is ready for workflow review, but it is not production-approved.** Production policy sign-off, printer/font approval, private object storage, backup/recovery, live migration, school UAT and certificate samples remain. Fee-counter methods are manually recorded; there is no payment gateway or bank integration. Do not use the demo build to collect real money. See `PROGRESS.md` for the exact verified scope and `DEPLOYMENT.md` for the Render demo boundary.
 
-Verification on 14 October 2026: 76 backend tests across seven suites and 34 Level 4 browser tests passed (33 mocked API contracts, one live browser/API/database flow), with passing backend/frontend builds, frontend TypeScript, Prisma validation and 13-migration deployment. Standalone lint is unconfigured; physical-printer, school UAT, external settlement and production recovery checks remain open. Exact commands and test limitations are in `PROGRESS.md`.
+Verification on 17 October 2026: 82 backend tests across nine suites passed, with backend/frontend builds, frontend TypeScript, Prisma validation and a 16-migration local deployment. The browser contract suite must be rerun after the simplified manual-counter UI changes. Standalone lint is unconfigured; physical-printer, school UAT, certificate samples and production recovery checks remain open. Exact commands and test limitations are in `PROGRESS.md`.
 
 | Document | Purpose |
 |---|---|
@@ -93,9 +94,9 @@ Verification on 14 October 2026: 76 backend tests across seven suites and 34 Lev
 
 ## Confirmed role model
 
-This is the target authority model. The current demo build supports collection, Accountant correction requests and Admin financial decisions; Teacher attendance/promotion workflows below are not yet implemented.
+This is the target authority model. The current synthetic build supports collection, academic lifecycle workflows, imports and Admin financial decisions; certificates remain deferred until current-ERP samples are provided.
 
-- **Superadmin:** one initial platform/school Superadmin with full operational access. Creates, deactivates, resets, and manages Admin accounts; the initial provisioning workflow does not create Accountant/Teacher accounts directly. May manage authorized school boundaries when multi-school support is introduced. The initial workflow does not create another Superadmin.
+- **Superadmin:** one initial platform/school Superadmin with full operational access. Creates, deactivates, resets, and manages Admin, Accountant and Teacher accounts. The workflow never creates or promotes another Superadmin.
 - **Admin:** may create Admin, Accountant, and Teacher accounts; may manage and deactivate Accountant/Teacher accounts; oversees school operations, fee plans, users, attendance approvals, promotion, and school finance. Only Superadmin may deactivate an Admin.
 - **Accountant:** controls fee accounting, collections, receipts, balances, credits, refunds/reversal requests, and reconciliation. Exceptional changes notify/request Admin approval. Full income/expense school-finance controls are Admin-only.
 - **Teacher:** sees assigned classroom data, marks day-wise attendance, submits attendance corrections for Admin approval, and makes the final Promote/Retain decision for students in the assigned classroom. A teacher may have no class-teacher assignment or one active class-teacher assignment per academic session.
@@ -116,6 +117,6 @@ The demo deployment is a Render-hosted frontend Web Service, NestJS API Web Serv
 
 ## Document status
 
-Version `0.5` — documentation reconciled with Levels 1–3, transport/store operations and the verified synthetic Level 4 demo controls. Original audit evidence and observed rates remain historical evidence, not approved configuration. The PRD, design and TRD retain the complete target contract and explicitly separate implemented behavior from remaining release requirements. `/health` is implemented; Render deployment, external monitoring, hosting size/budget and operational recovery still need configuration and approval.
+Version `0.6` — documentation reconciled with Levels 1–4, transport/store operations, academic lifecycle, imports/reports and manual fee-counter collection. Original audit evidence and observed rates remain historical evidence, not approved configuration. Certificates remain deferred pending current ERP samples. `/health` is implemented; Render deployment, external monitoring, hosting size/budget and operational recovery still need configuration and approval.
 
-**Next action:** push the completed demo changes, deploy a synthetic-only Render environment, and run the documented browser/API/database verification. Then obtain school decisions D06/D07/D12 and production approvals before any live import or real collection.
+**Next action:** deploy the latest synthetic-only changes to Render, apply all 16 migrations, run the documented browser/API/database verification, and review the remaining certificate samples and production approvals before any live import or real collection.

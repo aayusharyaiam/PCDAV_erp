@@ -45,7 +45,7 @@ export class ApprovalService {
         const payment = await tx.payment.findFirst({ where: { id: body.paymentId, schoolId: actor.schoolId } });
         if (!payment) throw new BadRequestException('Payment not found');
         if (body.type === 'BOUNCE') {
-          if (payment.mode !== 'CHEQUE' || !['PENDING_CHEQUE', 'CLEARED'].includes(payment.status)) throw new ConflictException('Only a pending or cleared cheque can be bounced');
+          if (payment.mode !== 'CHEQUE' || !['PENDING_CHEQUE', 'CAPTURED', 'CLEARED'].includes(payment.status)) throw new ConflictException('Only a recorded cheque can be bounced');
         } else if (!['CAPTURED', 'CLEARED', 'PARTIALLY_REFUNDED'].includes(payment.status)) throw new ConflictException('Only a captured payment can be corrected');
         const refunded = (await tx.paymentRefund.aggregate({ where: { schoolId: actor.schoolId, paymentId: payment.id }, _sum: { amountMinor: true } }))._sum.amountMinor ?? 0n;
         if (amountMinor !== null && amountMinor > payment.receivedAmountMinor - refunded) throw new BadRequestException('Refund exceeds the unrefunded payment amount');
