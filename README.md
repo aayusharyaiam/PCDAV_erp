@@ -4,9 +4,32 @@
 **Revised:** 14 October 2026 — version 0.5
 **Existing portal:** <https://pdav.webanlytic.in/software/login/index>  
 **School name displayed by the portal:** P DAV PUBLIC SCHOOL / PDAV PUBLIC SCHOOL  
-**Project folder:** `C:\Users\aayus\working-ly\PCDAV_erp`
+**Project folder:** repository root
 
 ## Start here
+
+## Local setup
+
+Required: Node.js `22.23.3` and PostgreSQL. The repository includes `.nvmrc`, a Dockerfile, and a full local Docker Compose stack.
+
+With Docker:
+
+```bash
+make install
+docker compose up --build
+```
+
+Without Docker, start PostgreSQL with `npm --prefix backend run db:local`, copy the two `.env.example` files to `.env`/`.env.local`, then run the backend and frontend commands below.
+
+Useful checks from the repository root:
+
+```bash
+make build
+make migrate
+make test
+```
+
+`make test` uses the local PostgreSQL URL from `DATABASE_URL` and never targets a Render database unless that variable is deliberately changed.
 
 ## Implementation status
 
@@ -21,9 +44,6 @@ Levels 1–3, transport/store operational management, and the synthetic-data Lev
 Run the local applications with:
 
 ```bash
-npm --prefix backend install
-npm --prefix frontend install
-npm --prefix backend run db:migrate
 npm --prefix backend run start:dev
 npm --prefix frontend run dev
 ```

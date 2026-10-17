@@ -14,5 +14,40 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      APP_MODE: demo
+      DATABASE_URL: postgresql://pcdav:pcdav_local@db:5432/pcdav?schema=public
+      FRONTEND_ORIGIN: http://localhost:3000
+      PORT: 4000
+    command: sh -c "npm run db:migrate && npm run start:prod"
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: frontend
+    depends_on:
+      - backend
+    environment:
+      API_INTERNAL_URL: http://backend:4000
+      PORT: 3000
+    command: npm start
+    ports:
+      - "127.0.0.1:3000:3000"
+
 volumes:
   postgres_data:

@@ -1,6 +1,6 @@
 # Beginner Render deployment guide
 
-**Purpose:** deploy the current Level 4 demo for synthetic-data review only.
+**Purpose:** deploy the current Level 4 application in production mode with synthetic data only.
 
 > **Do not use this guide to import the live school database or collect real money.** The demo has financial controls, but production approval, school UAT, external bank/refund settlement, private object storage, backups/restore, printer approval and live migration are still open.
 
@@ -25,6 +25,9 @@ You need:
 - The `main` branch pushed with the current changes.
 - A local password for the first synthetic Superadmin. Use a new password; do not place it in Git or this document.
 - An installed browser for the optional live Playwright test.
+- Node.js `22.23.3` is pinned by the repository `.nvmrc`.
+
+If Render still displays another Node version, add `NODE_VERSION=22.23.3` to that service's environment variables and redeploy.
 
 Render Free resources are suitable only for this disposable demo. Free web services sleep, and free databases have limited storage/lifetime and no production backup guarantee. Use a paid, always-on plan with managed backups before any real school data is considered.
 
@@ -41,7 +44,7 @@ This lets you confirm that the Next.js service builds independently. It will not
 7. Set **Build Command** to:
 
    ```text
-   npm ci && npm run build
+   npm ci --include=dev && npm run build
    ```
 
 8. Set **Start Command** to:
@@ -75,7 +78,7 @@ Create the backend service before creating the database so the three resources a
 5. Set **Build Command** to:
 
    ```text
-   npm ci && npm run build
+   npm ci --include=dev && npm run build
    ```
 
 6. Set **Start Command** to:
