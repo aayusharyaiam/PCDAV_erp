@@ -1,7 +1,7 @@
 # PCDAV ERP implementation progress
 
-**Last updated:** 17 October 2026
-**Documentation revision:** 0.6 — synchronized with academic lifecycle, imports, manual counter collection and Render guidance
+**Last updated:** 29 October 2026
+**Documentation revision:** 0.6 — updated project priorities, technical audit findings, and verified core workflows
 **Application revisions:** academic lifecycle at `2a95b1b`; current core-school workflow changes are pending commit/push in this session
 **Current branch:** `main`
 **Current milestone:** Core school workflow slice implemented: lifecycle, imports, reports and manual fee-counter collection; Render synthetic-data deployment is active
@@ -69,17 +69,32 @@
 - A Teacher may have zero or one active class-teacher assignment per academic session.
 - Fee-plan/assessment foundations are Level 3. Level 4 demo controls are implemented and verified, but this build remains synthetic-data-only. Do not record real payments or import live balances.
 
-## Not yet implemented or not production-approved
+## Updated project priorities (Post-prototype verification)
 
-- External bank/gateway/refund execution and settlement matching are intentionally out of scope for fee-counter collection; manual UPI/bank-transfer entries are recorded as staff-entered methods.
-- Production-approved financial rules, receipt series, old-session policy, bounce fee, live rates and school authority sign-off
-- Devanagari-capable/office-approved receipt fonts and physical printer approval
-- Production object storage for documents, managed worker separation, backups/restore and deployment monitoring
-- Full statutory/management report acceptance and school UAT
-- Live-data import/migration rehearsal and production reconciliation
-- Certificate screens/templates (waiting for current ERP samples)
-- School-approved report definitions and statutory formats
-- Background worker for future financial/document jobs
+### Priority 0 (P0) — Production gates and critical technical fixes
+
+1. **Devanagari and Unicode script support in Receipt PDF generator:** Embed an open-source UTF-8/Devanagari font (e.g., Google Noto Sans Devanagari) into `PDFKit`. Replace the temporary Helvetica WinAnsi character restriction (`UNSUPPORTED_TEXT`) so that student, guardian, or institution names in Hindi/Sanskrit render accurately instead of failing closed.
+2. **School financial rules and policy sign-off:** Obtain formal management sign-off on the published fee circular, installment dates, concession stacking (EWS, siblings, staff), cheque bounce fees, and production receipt series (`PDAV/...` instead of demo `DEMO/FEE`).
+3. **Private S3-compatible object storage provisioning:** Configure AWS S3, Cloudflare R2, or MinIO for document storage to transition out of `APP_MODE=demo` and safely unblock live admissions documents, student records, and certificate uploads.
+4. **Rate-limit table maintenance:** Add an automated periodic cleanup query/cron for expired `LoginAttempt` records (`windowStart < NOW() - INTERVAL '15 minutes'`) to prevent unbounded PostgreSQL table accumulation.
+5. **Prisma schema index mapping cleanup:** Correct the index mapping name on model `Family` from `map: "Enrollment_id_school_unique"` to `map: "Family_id_school_unique"` in a future non-breaking migration.
+6. **Physical printer and hardware verification:** Validate actual 80mm thermal receipt printers and standard office A4 laser printers against rendered receipt PDFs and `@media print` CSS.
+7. **School User Acceptance Testing (UAT):** Conduct hands-on testing by real school operators across their specific roles: Principal, Accountant, Admissions Officer, and Class Teachers.
+8. **Live data migration rehearsal:** Execute dry-run imports with vendor export files, reconcile student opening balances and fee arrears against signed school totals, and practice delta cutover.
+
+### Priority 1 (P1) — Immediate operational additions
+
+1. **Official school certificates:** Implement Transfer Certificate (TC/SLC), Character Certificate, and Bonafide Certificate templates and issuance workflows once approved school physical samples are provided.
+2. **Digital payment collection:** Integrate online UPI QR, payment gateway (e.g., Razorpay/Cashfree), or BBPS for parent online fee payments.
+3. **Automated parent communication:** Integrate SMS and WhatsApp gateways for automated fee dues reminders, attendance absence alerts, and payment confirmations.
+4. **Dedicated background worker separation:** Decouple PDF generation and heavy batch imports into a separate worker queue (e.g., pg-boss or BullMQ) as operational transaction volume increases.
+
+### Priority 2 (P2) — Expanded ERP modules
+
+1. **Examinations and grading:** Master marks registers, term-wise examinations, grading rules, and CBSE-compliant report card printing.
+2. **HR, payroll, and staff management:** Staff directory, leave applications/approvals, biometric attendance integration, and monthly salary disbursement slips.
+3. **Timetable and substitutions:** Master class/teacher schedules, room allocations, and daily absent-teacher substitution tracking.
+4. **External accounting sync:** Double-entry journal voucher export into accounting software (Tally or Zoho Books).
 
 ## Next milestone
 
@@ -152,9 +167,9 @@ E2E_DATABASE_URL='postgresql://pcdav:pcdav_local@localhost:5433/pcdav?schema=pub
   npm run test:e2e -- tests/level-4-live.spec.ts tests/level-4-contracts.spec.ts --workers=1
 ```
 
-The live test requires both applications' dependencies and rejects non-local database hosts. No production credentials or seed-password changes are needed. Thirteen migrations are present. The latest combined run passed 34 tests: 33 mocked Level 4 contract tests and one live synthetic flow covering collection, cash movement, correction approval, reports/statements, PDF status and shift close. Because financial history is append-only, the live run retains generated synthetic history and disables fixture accounts instead of deleting immutable records. The expected receipt-issuance-failure regression logs one simulated database error while still passing its rollback assertions. Backend integration tests must use a fresh disposable schema because the seeded demo schema already contains the one permitted Superadmin.
+The live test requires both applications' dependencies and rejects non-local database hosts. No production credentials or seed-password changes are needed. Sixteen migrations are present. The latest combined run passed 34 tests: 33 mocked Level 4 contract tests and one live synthetic flow covering collection, cash movement, correction approval, reports/statements, PDF status and shift close. Because financial history is append-only, the live run retains generated synthetic history and disables fixture accounts instead of deleting immutable records. The expected receipt-issuance-failure regression logs one simulated database error while still passing its rollback assertions. Backend integration tests must use a fresh disposable schema because the seeded demo schema already contains the one permitted Superadmin.
 
-Current verification on 14 October 2026: backend build, frontend production build, frontend app/test TypeScript, Prisma validation/deployment, 76 backend tests across seven suites, 33 mocked browser contracts, one live browser/API/PostgreSQL flow and report-source validation passed. Standalone lint is still unconfigured; Word visual review, physical-printer approval, school UAT, external settlement and production recovery were not run.
+Current verification on 29 October 2026: backend build, frontend production build across all 33 routes, frontend app/test TypeScript checks, Prisma validation and 16-migration deployment, 82 backend tests across nine suites, 33 mocked browser contracts, one live browser/API/PostgreSQL flow and report-source validation passed. Priority technical gates identified: Devanagari font embedding in PDFKit, S3 storage configuration, LoginAttempt table pruning, Family index mapping fix, and physical printer verification. Standalone lint is still unconfigured; Word visual review, physical-printer approval, school UAT, external settlement and production recovery remain open.
 
 Report refresh commands (repository root):
 

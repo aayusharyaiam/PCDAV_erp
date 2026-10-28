@@ -53,13 +53,29 @@ Account lifecycle rules:
 
 ## 3. Scope and priorities
 
-**P0 — operational release:** identity/access, school/session/class masters, admissions and student registry, admission-number identity, versioned fees, monthly/annual/new-admission assessments, concessions/fines, transport and hostel fee/service integration, cash/manual bank payments, cheque lifecycle, receipts, arrears/partial payments/student credit, reversals/refunds, fee-accounting reports/day close, day-wise teacher attendance, Admin-approved attendance corrections, teacher Promote/Retain decisions, withdrawal/certificates, promotion, migration, backups, and audit trail.
+The core operational workflow (Levels 1–4, transport/store operational management, academic lifecycle, student lifecycle, and CSV imports) is fully implemented and verified in the prototype. Priorities are re-baselined into:
 
-**P1 — immediate extensions:** reminders, parent self-service and gateway payments, richer import/export, full transport operations, document request routing, management analytics. Bring any item forward if the school confirms it is essential to daily operation.
+**P0 — Production readiness gates and critical technical fixes:**
+- Devanagari and Unicode script font embedding in Receipt PDF generator (`PDFKit`) to eliminate `UNSUPPORTED_TEXT` exceptions on Hindi/Sanskrit names.
+- School financial circular approval, installment calendar, concession stacking, bounce charges, and production receipt series prefix (`PDAV/...`).
+- Private S3-compatible object storage provisioning for admissions, student records, and document uploads.
+- Automated cleanup/pruning for expired `LoginAttempt` rate-limiting records.
+- Prisma schema index mapping cleanup on `Family` (`map: "Family_id_school_unique"`).
+- Physical printer and hardware testing (80mm thermal receipt rolls and standard A4 laser printers).
+- Role-based School User Acceptance Testing (Principal, Accountant, Admissions, Teacher).
+- Production data migration rehearsal and financial opening balance reconciliation.
 
-**P2 — expanded ERP:** store inventory, full finance vouchers/accounting export beyond the Admin-controlled core financial oversight, examinations, employee operations, front office, timetable, communication, and learning/app modules after their discovery is complete. Attendance is P0 for day-wise teacher marking; exam attendance and advanced examination workflows remain later scope.
+**P1 — Immediate operational extensions:**
+- School certificates (Transfer Certificate TC/SLC, Character Certificate, Bonafide Certificate) from approved physical samples.
+- Digital payment collection: Online UPI QR, payment gateway, and BBPS integration for parent online payments.
+- Automated parent communication: SMS and WhatsApp notifications for daily student absence, fee due reminders, and payment receipts.
+- Dedicated background worker queue (e.g., pg-boss or BullMQ) for decoupled job processing.
 
-**Current staging note:** Management requested transport and store visibility during the prototype. A bounded transport/store operational slice is available early for route, inventory, student-issue, and continuity review, and open store issues now settle through the shared Level 4 staging collection flow. This does not approve store payment collection or full finance for production; the remaining payment/accounting controls and school decisions still apply.
+**P2 — Expanded ERP modules:**
+- Examinations and grading: Marks entry, grading rules, and CBSE-compliant report card printing.
+- HR, payroll, and staff management: Staff directory, leave workflows, biometric attendance, and monthly salary disbursement slips.
+- Timetable and substitutions: Master class/teacher schedules, room allocations, and daily absent-teacher substitution tracking.
+- External accounting sync: Double-entry journal voucher export into accounting software (Tally or Zoho Books).
 
 **Continuity rule:** a used legacy module cannot simply disappear. For a deferred module, explicitly retain an agreed operational process, reconcile its financial balances, and specify the integration/manual handoff. Store, transport, and hostel dues required for clearance must remain visible even if their full operational modules are deferred. Hostel fee assessment and dated hostel assignments remain in the replacement scope.
 

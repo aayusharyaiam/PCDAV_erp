@@ -2,7 +2,7 @@
 ## Management Overview and Approval Guide
 
 **For:** Principal, school management, office team, admissions team, accountant, and department heads
-**Updated:** 14 October 2026 — version 0.5
+**Updated:** 29 October 2026 — version 0.6
 **Purpose:** explain in simple language what the new website does, what staff will be able to do, what is still being built, and what the school must approve.
 
 > **Important:** This is a staging/prototype implementation using test data. It is not ready to accept real school payments yet.
@@ -54,9 +54,9 @@ The Level 4 demo journey now works with synthetic test data, including Accountan
 | Receipts and corrections | View original receipt snapshots, record browser reprints, request/decide corrections, clear cheques, check/download/retry current-status PDFs | Working in synthetic staging; production printer/storage/settlement approval pending |
 | Cashier shifts | Open a shift, record deposits/handovers/Admin expenses, compare expected/count cash, record variance and close | Working in synthetic staging; production reconciliation approval pending |
 | Finance policy/reports | Review demo policy, view statements, dues, collection and journal reports | Working in synthetic staging; school report definitions pending |
-| Attendance | Teacher day-wise attendance and Admin corrections | Planned |
-| Promotion/leaving | Teacher Promote/Retain, Admin batch promotion, withdrawal, TC/SLC | Planned |
-| Migration/reports | Import approved live data and complete management reports | Planned after approval |
+| Attendance | Teacher day-wise attendance and Admin-reviewed corrections | Working in prototype |
+| Promotion/leaving | Teacher Promote/Retain decisions, Admin batch promotion, and withdrawal/readmission | Working in prototype |
+| Migration/reports | Synthetic CSV preview/commit imports and enrollment/store/dues/journal reports | Working in prototype |
 
 ---
 
@@ -285,17 +285,18 @@ The store workspace shows:
 | Cashier opening float, movements, counted cash and variance close | Production reconciliation, backups/recovery and school acceptance |
 | Hostel/transport charges and transport allocation | Approved live service data and charge/cutoff policies |
 | Store inventory, issues and shared balance settlement | Live store import, store-specific reports and approved receipt policy |
-| Synthetic automated workflows | Attendance/promotion/leaving release, migration, backups and cutover sign-off |
+| Synthetic automated workflows, attendance, promotion, lifecycle, and CSV imports | Font embedding, S3 storage, rate approval, printer testing, live migration, and school UAT |
 
 The website can be demonstrated with synthetic data. Do not import the live school database or collect real money until the school signs off the remaining controls.
 
-### What was checked on 14 October 2026
+### What was checked on 29 October 2026 (revision 0.6)
 
-- 76 backend/database tests passed across seven suites, covering payment security, retries, refunds/corrections, cheque states, exact amounts, approvals, cash movements, journal/credit lineage, immutable history, reports/statements and PDF jobs.
+- 82 backend and database tests passed across nine suites, covering payment security, retries, refunds, corrections, cheque states, exact amounts, approvals, cash movements, journal and credit lineage, immutable history, reports and statements, PDF jobs, academic lifecycle, student lifecycle, and CSV imports.
 - 33 browser tests passed against controlled simulated API responses, checking the real Level 4 screens and request formats.
-- One additional live browser test passed against the local API and PostgreSQL: a synthetic Accountant opened a shift, collected cash, recorded a movement, submitted a correction, an Admin approved it, reports/statements were checked, the receipt PDF path was exercised, and the shift was closed. Immutable synthetic history was retained and fixture accounts disabled.
-- Both application builds, TypeScript checks and 13-migration schema checks passed.
-- These are developer checks, not school UAT or approval of financial policies. Physical printer/font output, external settlement, object-storage/worker productionization, standalone lint setup and production recovery remain outstanding.
+- Complete frontend production build and TypeScript check passed for all 33 routes with zero errors.
+- 16 Prisma migrations deployed and validated against PostgreSQL.
+- Verified priority items: Devanagari font embedding in PDFKit, S3 object storage for document uploads, LoginAttempt table pruning, Family index mapping cleanup, physical printer validation, and school UAT.
+- These are developer checks, not school UAT or approval of financial policies. Physical printer and font output, external settlement, object storage and worker productionization, standalone lint setup and production recovery remain outstanding.
 
 ---
 
@@ -347,10 +348,10 @@ Please mark each item as **Approved**, **Change required**, or **Need discussion
 
 ## 10. Simple next steps
 
-1. **Management review:** confirm the decisions in section 9.
-2. **Staging demonstration:** staff test admission, student search, fee-plan preview, transport allocation, store issues, policy, payment quotes, partial/selected/advance payments, original receipts, correction decisions, statements, reports, PDF status/download, cheque handling and cash movements using sample data.
-3. **Production gates:** approve the financial policy, receipt series/fonts/printer, external settlement, object storage/worker, report definitions, backups/recovery and UAT. Existing demo screens are not approval to collect real money.
-4. **Data preparation:** receive an authorised export and reconcile counts and balances.
+1. **Management review:** confirm the decisions in section 9 and sign off the fee circular.
+2. **Resolve technical priority gates:** embed Devanagari fonts in receipt PDFs, configure private S3 storage, add login rate-limit pruning, and correct the Family schema index.
+3. **Hardware and printer verification:** test receipt printing on the school's actual counter roll printers and laser printers.
+4. **Data preparation:** receive an authorised export and reconcile counts, dues, and opening balances.
 5. **User acceptance testing:** accountant, admissions operator, Admin, Teacher, and management test their own journeys.
 6. **Go-live rehearsal:** test backup restore, final import, printer output, permissions, and support process.
 7. **Production launch:** use one authorised collection system and reconcile every day during the first operating period.
@@ -366,7 +367,7 @@ The detailed technical documents remain available for development and approval:
 - `prd.md` — product requirements and acceptance criteria.
 - `design.md` — screen and user-journey design.
 - `trd.md` — database, financial safety, migration, hosting, and testing requirements.
-- `roadmap.md` — delivery phases and go-live gates.
+- `roadmap.md` — delivery phases, updated project priorities, and go-live gates.
 - `PROGRESS.md` — current implementation status and exact verification commands.
 
 The management team does not need to read these documents line by line. They are supporting documents for the development team and future approvals.
@@ -375,6 +376,6 @@ The management team does not need to read these documents line by line. They are
 
 ## Final recommendation
 
-Approve the direction for synthetic staging demonstration, not production payment use yet. The prototype now includes student/enrollment and fee foundations, transport/store operations, and tested payment-to-receipt, approval, journal, cash-movement, report, PDF and close journeys. The next release gate requires the school decisions, external settlement, printer/storage/worker approval, UAT, recovery and migration controls above. No live records or real collections were used for the local automated verification.
+Approve the direction for synthetic staging demonstration, not production payment use yet. The prototype now includes student/enrollment and fee foundations, transport/store operations, academic lifecycle, student lifecycle, and tested payment-to-receipt, approval, journal, cash-movement, report, PDF and close journeys. The next release gate requires the school decisions, external settlement, printer/storage/worker approval, UAT, recovery and migration controls above. No live records or real collections were used for the local automated verification.
 
 **Report status:** Simplified management overview — ready for comments, Render demo review and school UAT planning.

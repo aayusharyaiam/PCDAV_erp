@@ -1,7 +1,7 @@
 # PCDAV School ERP — discovery and implementation documents
 
 **Prepared:** 4 October 2026  
-**Revised:** 17 October 2026 — version 0.6
+**Revised:** 29 October 2026 — version 0.6 (re-baselined priorities and review findings)
 **Existing portal:** <https://pdav.webanlytic.in/software/login/index>  
 **School name displayed by the portal:** P DAV PUBLIC SCHOOL / PDAV PUBLIC SCHOOL  
 **Project folder:** repository root

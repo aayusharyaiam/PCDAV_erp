@@ -1,11 +1,13 @@
 # Implementation procedure and roadmap
 
-**Version:** 0.5, revised 14 October 2026 (legacy audit: 4 October 2026)
+**Version:** 0.6, revised 29 October 2026 (legacy audit: 4 October 2026)
 **Goal:** replace the core student/fee workflow safely and efficiently, including hostel fees, transport operations, store operations, teacher attendance, teacher classroom promotion decisions, and the confirmed account hierarchy, then expand the ERP in controlled phases.
 
 ## Current delivery position
 
-Levels 1–4, transport/store operations, academic lifecycle, imports and reports are implemented for synthetic review. Management can review partial balances/credit, manual Cash/UPI/Bank transfer/Cheque counter flows, receipt snapshots/PDF jobs, Accountant requests/Admin decisions, attendance/corrections, Promote/Retain, withdrawal/readmission, CSV imports and operational reports. Certificates remain deferred until current ERP samples arrive. Production policy, printer/object-storage/worker approval, UAT, backups and recovery remain.
+Levels 1–4, transport/store operations, academic lifecycle (daily attendance, corrections, promote/retain, batch promotion), student lifecycle (withdrawals, transfers, readmission), CSV imports (preview/commit), operational/financial reports and receipt PDF generation are fully implemented and verified in the staging codebase (82 backend tests across 9 suites, 16 Prisma migrations, zero TypeScript errors).
+
+Management can review partial balances/credit, manual Cash/UPI/Bank transfer/Cheque counter flows, receipt snapshots/PDF jobs, Accountant requests/Admin decisions, attendance/corrections, Promote/Retain, withdrawal/readmission, CSV imports and operational reports. Certificates remain deferred until current ERP samples arrive. Production policy, printer/object-storage/worker approval, UAT, backups and recovery remain.
 
 Level 4 corresponds to the collection-to-receipt and finance-control work in Phase 3 below; level numbers and phase numbers are not interchangeable. The current 82 backend tests are developer evidence, not a completed Phase 3 exit or school UAT. Phase windows and the first-week checklist are the original sequencing guidance, not a current forecast or a list of work to redo.
 
@@ -48,6 +50,41 @@ Start data discovery in week 1. Migration, receipt samples, and financial rules 
 | D15 — P1/P2 | Which store/finance/exam/front-office/app modules are genuinely used? Define continuity for each deferred module; attendance day-wise marking is already P0 | Department owners | Scope freeze / expansion |
 
 Maintain a decision log with date, owner, answer, affected requirement and example calculation. An unresolved item should be a visible dependency, not a guessed rule buried in code.
+
+## 2.1 Updated project priorities (Post-prototype verification)
+
+With Levels 1–4, attendance, promotions, store/transport operations, CSV imports, and financial reports already implemented and verified in the staging prototype, the project priorities are re-baselined into three distinct tiers:
+
+### Priority 0 (P0) — Production readiness gates and critical technical fixes
+
+These items are mandatory before any real student data is imported or live fees are collected:
+
+1. **Devanagari and Unicode script support in Receipt PDF generator:** Embed an open-source UTF-8/Devanagari font (such as Google Noto Sans Devanagari) into `PDFKit`. Replace the temporary Helvetica WinAnsi character filter (`UNSUPPORTED_TEXT`) so that student, guardian, or institution names in Hindi/Sanskrit render accurately instead of failing closed.
+2. **School financial rules and policy sign-off:** Obtain formal management sign-off on the published fee circular, installment dates, concession stacking (EWS, siblings, staff), cheque bounce fees, and production receipt series (`PDAV/...` instead of demo `DEMO/FEE`).
+3. **Private S3-compatible object storage provisioning:** Configure AWS S3, Cloudflare R2, or MinIO for document storage to transition out of `APP_MODE=demo` and safely unblock live admissions documents, student records, and certificate uploads.
+4. **Rate-limit table maintenance:** Add an automated periodic cleanup query/cron for expired `LoginAttempt` records (`windowStart < NOW() - INTERVAL '15 minutes'`) to prevent unbounded PostgreSQL table accumulation.
+5. **Prisma schema index mapping cleanup:** Correct the index mapping name on model `Family` from `map: "Enrollment_id_school_unique"` to `map: "Family_id_school_unique"` in a future non-breaking migration.
+6. **Physical printer and hardware verification:** Validate actual 80mm thermal receipt printers and standard office A4 laser printers against rendered receipt PDFs and `@media print` CSS.
+7. **School User Acceptance Testing (UAT):** Conduct hands-on testing by real school operators across their specific roles: Principal, Accountant, Admissions Officer, and Class Teachers.
+8. **Live data migration rehearsal:** Execute dry-run imports with vendor export files, reconcile student opening balances and fee arrears against signed school totals, and practice delta cutover.
+
+### Priority 1 (P1) — Immediate operational additions
+
+Post-launch enhancements to increase automation and self-service:
+
+1. **Official school certificates:** Implement Transfer Certificate (TC/SLC), Character Certificate, and Bonafide Certificate templates and issuance workflows once approved school physical samples are provided.
+2. **Digital payment collection:** Integrate online UPI QR, payment gateway (e.g., Razorpay/Cashfree), or BBPS for parent online fee payments.
+3. **Automated parent communication:** Integrate SMS and WhatsApp gateways for automated fee dues reminders, attendance absence alerts, and payment confirmations.
+4. **Dedicated background worker separation:** Decouple PDF generation and heavy batch imports into a separate worker queue (e.g., pg-boss or BullMQ) as operational transaction volume increases.
+
+### Priority 2 (P2) — Expanded ERP modules
+
+Subsequent phases after the core school operating workflow is stable:
+
+1. **Examinations and grading:** Master marks registers, term-wise examinations, grading rules, and CBSE-compliant report card printing.
+2. **HR, payroll, and staff management:** Staff directory, leave applications/approvals, biometric attendance integration, and monthly salary disbursement slips.
+3. **Timetable and substitutions:** Master class/teacher schedules, room allocations, and daily absent-teacher substitution tracking.
+4. **External accounting sync:** Double-entry journal voucher export into accounting software (Tally or Zoho Books).
 
 ## 3. First working session with the school
 
@@ -261,9 +298,19 @@ The foundation and demonstration work in this original checklist has since been 
 
 ## 10. What to do next
 
-1. **Confirm outstanding school decisions, especially D06/D07/D12.** Review allocation/store settlement, receipt series, correction authority, cashier dates/shifts and bank/refund evidence. Include a Teacher for the still-pending attendance and promotion workflows.
-2. **Obtain a vendor export sample and redacted print samples immediately.** This establishes whether the financial history can be migrated faithfully.
-3. **Demonstrate the existing Accountant staging flow and fee calculations.** Validate admission-number search, partial payment, store settlement, credit, frozen retries, receipt history and cash close with synthetic data. Attendance and promotion are designs to validate, not delivered screens.
-4. **Finish Level 4 controls before expanding.** Start with Accountant correction request → Admin approve/reject, bound to one action/record/version and applied once. Then complete journal/credit lineage, cash movements, PDF worker, reports and signed policy configuration. Add broader modules only after financial acceptance.
+1. **Resolve Priority 0 technical gates:**
+   - Embed Devanagari/UTF-8 font support in the receipt PDF renderer.
+   - Configure private S3 storage credentials for production uploads.
+   - Add periodic table pruning for expired `LoginAttempt` records.
+   - Clean up the `Family` index mapping name in Prisma.
+2. **Execute school policy and rate sign-off:**
+   - Obtain formal sign-off on the 2026–2027 fee circular, concession stacking, bounce charges, and official receipt prefix (`PDAV/FEE/2026/`).
+   - Validate live staff assignments and cashier shift rules.
+3. **Conduct physical hardware and printer verification:**
+   - Test PDF and browser print outputs on the school's actual counter roll printers and laser printers.
+4. **Rehearse live data migration:**
+   - Obtain real vendor export CSVs, validate with the preview import engine, and reconcile control totals.
+5. **Conduct role-based School User Acceptance Testing (UAT):**
+   - Guide the Principal, Accountant, Admissions Officer, and Class Teachers through end-to-end operational scenarios before setting the cutover date.
 
-The immediate deliverables are a school-approved financial decision log, an approved review of the current synthetic prototype, and completion of the remaining Level 4 acceptance criteria. The unchecked go-live gates above remain release requirements even where narrow automated staging tests already pass.
+The immediate deliverables are completion of the P0 technical fixes, a school-approved financial decision log, and execution of migration rehearsals. The unchecked go-live gates above remain release requirements even where automated staging tests pass.
