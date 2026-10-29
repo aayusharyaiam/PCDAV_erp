@@ -2,7 +2,7 @@
 
 The backend is a NestJS + TypeScript modular monolith using Prisma and PostgreSQL.
 
-**Documentation revision:** 0.6 — 17 October 2026. Core school workflows, academic lifecycle, imports/reports and manual fee-counter collection are available. This is not a production release; see `../PROGRESS.md` and `../DEPLOYMENT.md` for acceptance gaps, test evidence and the Render procedure.
+**Documentation revision:** 0.7 — 30 October 2026. Core school workflows, academic lifecycle, imports/reports, Devanagari Unicode PDF receipts, and manual fee-counter collection are implemented. This is not a production release; see `../PROGRESS.md` and `../DEPLOYMENT.md` for acceptance gaps, test evidence and the Render procedure.
 
 ## Local setup
 
@@ -31,7 +31,7 @@ The seed uses the email `superadmin@pcdav.local` unless `SEED_SUPERADMIN_EMAIL` 
 ## Management-facing API areas
 
 - `/applications`, `/students`, and `/school` — admissions, student records, sessions, classes, and academic setup.
-- `/students/:id/withdraw`, `/students/:id/strike-off`, `/students/:id/transfer`, `/students/:id/readmit`, and `/students/:id/lifecycle` — dated leaving, transfer/readmission and append-only lifecycle history; certificates are outside this API slice.
+- `/students/:id/withdraw`, `/students/:id/strike-off`, `/students/:id/transfer`, `/students/:id/readmit`, and `/students/:id/lifecycle` — dated leaving, transfer/readmission and append-only lifecycle history; certificates like TC, SLC, and Fee receipts are to be added and printed with individual student details once base sample files/templates are provided in the project directory.
 - `/fee-heads`, `/fee-plans`, `/assessments`, `/credits`, and `/students/:id/ledger` — fee configuration, assessment, balance, and credit.
 - `/services` — dated hostel and generic service assignments.
 - `/transport/routes`, `/transport/vehicles`, `/transport/allocations`, and `/transport/report` — transport masters, student allocation, capacity checks, and operational lists.
@@ -72,7 +72,7 @@ The seed uses the email `superadmin@pcdav.local` unless `SEED_SUPERADMIN_EMAIL` 
 - Authenticated writes require `pcdav_session`, same-origin request, and `X-CSRF-Token`.
 - `version` fields are required for mutable student, application, school, and classroom edits.
 - Level 4 payment and refund commands require `Idempotency-Key`. Amounts are integer-paise strings, not floating-point rupees. Reuse the exact payload/key after an ambiguous response; never collect/refund again with a fresh key until the original outcome is resolved.
-- Do not use this build to record real payments: use synthetic data until school policy, UAT, backups and production approval are complete. Fee-counter methods are manually recorded; no payment gateway or bank API is used.
+- Do not use this build to record real payments: use synthetic data until school policy, UAT, backups and production approval are complete. Fee-counter methods are manually recorded; no payment gateway, online checkout or bank API is used. The application functions strictly as an internal administrative ledger for school accountants and fee collection staff.
 
 ### Synthetic CSV imports
 
@@ -103,13 +103,13 @@ Supported paths and required CSV columns are:
 
 ## Verification and next milestone
 
-The migration history contains 16 reviewed migrations, including manual counter method compatibility and lifecycle/import records. Regenerate Prisma after schema changes (`npm run db:generate`) and deploy reviewed migrations (`npm run db:migrate`). Do not delete history to force deployment. Existing records are not retroactively marked verified; migration backfills use explicit opening entries and retain untraced-history indicators.
+The migration history contains 17 reviewed migrations, including manual counter method compatibility, lifecycle/import records, and the Family index cleanup (Migration 17). Regenerate Prisma after schema changes (`npm run db:generate`) and deploy reviewed migrations (`npm run db:migrate`). Do not delete history to force deployment. Existing records are not retroactively marked verified; migration backfills use explicit opening entries and retain untraced-history indicators.
 
 `DATABASE_URL=<fresh-disposable-test-url> npm test -- --runInBand` runs 82 integration tests across nine suites using synthetic school IDs, including lifecycle/import/report coverage. Run this against a fresh disposable database/schema, not the seeded demo schema: the database intentionally permits only one Superadmin. `npm run build` compiles the API. Browser contracts and the live end-to-end synthetic Level 4 test are documented in `../frontend/README.md`.
 
-Remaining production gates: approved financial policy, external bank/refund settlement, school UAT, physical printer/font approval, private object storage, separate production worker, backups/restore, monitoring and live migration. Reversal of already-spent advance is supported only when traceable lineage exists; missing historical evidence remains visible and blocks unsafe correction. Import approved live data only after these gates and accountant review.
+Remaining production gates: approved financial policy, school UAT, base certificate sample provision (TC, SLC, Fee receipts), physical printer output approval, private object storage, separate production worker, backups/restore, monitoring and live migration. Note: Online payment gateways are excluded by school requirements (internal staff ledger only); automated SMS and WhatsApp communication triggers are deferred to later project stages. Reversal of already-spent advance is supported only when traceable lineage exists; missing historical evidence remains visible and blocks unsafe correction. Import approved live data only after these gates and accountant review.
 
-The Word file in the repository root is a generated management report, not a financial receipt. The current-status receipt PDF worker exists for the synthetic demo, but its PostgreSQL byte storage and bounded in-API worker are not the production object-storage/worker architecture.
+The Word file in the repository root is a generated management report, not a financial receipt. Receipt PDFs embed TrueType fonts (Noto Sans Devanagari Regular and Bold) supporting Hindi/Devanagari names in addition to standard ASCII text. The current-status receipt PDF worker exists for the synthetic demo, but its PostgreSQL byte storage and bounded in-API worker are not the production object-storage/worker architecture.
 
 ## Render service notes
 

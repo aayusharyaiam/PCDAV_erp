@@ -1,6 +1,6 @@
 # Documentation tools
 
-**Documentation revision:** 0.5 — 14 October 2026. The management report now describes the tested synthetic Level 4 demo controls and the remaining production gates, without presenting it as production-ready.
+**Documentation revision:** 0.7 — 30 October 2026. The management report now reflects the Priority 0 technical implementations (Devanagari font support, index migration 17, session pruning), the certificate sample printing workflow, and the confirmed school requirements (pure internal staff collection ledger, no payment gateways, and SMS/WhatsApp triggers deferred).
 
 Install dependencies, regenerate the Word report, and validate the package from the repository root:
 

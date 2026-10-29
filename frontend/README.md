@@ -2,7 +2,7 @@
 
 The frontend is a Next.js + React + TypeScript staff workspace. It is deliberately separate from `backend/` for independent Render deployment.
 
-**Documentation revision:** 0.6 — 17 October 2026. This is a synthetic-data deployment, not an approved production release. The complete target screens remain in `../design.md`; current acceptance gaps and next work are in `../PROGRESS.md` and `../DEPLOYMENT.md`.
+**Documentation revision:** 0.7 — 30 October 2026. This is a synthetic-data deployment, not an approved production release. The complete target screens remain in `../design.md`; current acceptance gaps and next work are in `../PROGRESS.md` and `../DEPLOYMENT.md`.
 
 ## Local setup
 
@@ -30,7 +30,7 @@ Open `http://localhost:3000`. Browser API calls use same-origin `/api/v1` routes
 - Dated transport/hostel service-assignment workspace.
 - Transport management workspace with route/vehicle masters, driver details, student allocation, capacity validation feedback, and operational report filters.
 - Store management workspace with group/vendor/product masters, stock receipts, inventory counts, student item issues, cancellations, low-stock visibility, and open issue balances.
-- Payment collection with server-controlled or explicitly selected fee/store allocation, partial payments and advance credit, cash change, selectable manual Cash/UPI/Bank transfer/Cheque methods, and frozen-payload idempotent retries across reloads. There is no payment gateway or bank API.
+- Payment collection with server-controlled or explicitly selected fee/store allocation, partial payments and advance credit, cash change, selectable manual Cash/UPI/Bank transfer/Cheque methods, and frozen-payload idempotent retries across reloads. The application operates strictly as an internal staff collection ledger; there is no payment gateway, online aggregator or parent payment portal.
 - Receipt register with immutable school/student/payer/allocation snapshots, reasoned reprint events, current-status PDF jobs and download/retry/status actions. Accountants submit correction requests; Admin/Superadmin decisions apply exact corrections once. Accountants can clear cheques; direct bounce/reversal/refund remains Admin/Superadmin-only.
 - Cashier shift opening for all payment modes, server expected-cash review, deposits, handovers, Admin expenses, counted cash, and reasoned variance close. Only the cashier or Admin/Superadmin can close a shift.
 - Finance request inbox, versioned demo policy editor, fee/store selection, student statements, dues/collection/journal reports, and role-aware Level 4 navigation.
@@ -38,10 +38,10 @@ Open `http://localhost:3000`. Browser API calls use same-origin `/api/v1` routes
 
 ## Remaining work and production boundary
 
-- Production-approved financial rules, external bank/refund settlement, private object storage, physical printer/font approval, full school UAT, backups/restore and live migration. The current PDF path is a synthetic demo worker backed by PostgreSQL bytes, not the final production object-storage worker.
+- Production-approved financial rules, private object storage, physical printer output approval, full school UAT, backups/restore and live migration. Note: Online payment gateways are excluded by school requirement (internal staff ledger only); automated SMS and WhatsApp communication triggers are deferred to later project stages. The current PDF path is a synthetic demo worker backed by PostgreSQL bytes, not the final production object-storage worker.
 - Attendance, correction approval and Promote/Retain screens are available under `/attendance` and `/promotion`.
 - Withdrawal/strike-off, transfer/readmission, CSV imports, enrollment/admission reports and store operational reports are available under `/lifecycle`, `/imports` and `/reports`.
-- Certificates are intentionally deferred until current ERP samples are provided. Parent/gateway views and remaining statutory formats are also deferred.
+- Certificates like TC, SLC, and Fee receipts are to be added and printed with individual student details once base physical/PDF samples are provided in the project directory. Online payment gateways and parent payment portals are permanently excluded per school requirements (internal staff ledger only). Automated SMS/WhatsApp triggers are deferred to later stages.
 
 Store issues are included automatically in oldest-due payment allocation. The quote accepts only student and amount; it does not support selecting individual balances. Stock receipts are inventory receipts and are not payment receipts.
 

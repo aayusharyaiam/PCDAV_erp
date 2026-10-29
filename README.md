@@ -1,7 +1,7 @@
 # PCDAV School ERP — discovery and implementation documents
 
 **Prepared:** 4 October 2026  
-**Revised:** 29 October 2026 — version 0.6 (re-baselined priorities and review findings)
+**Revised:** 30 October 2026 — version 0.7 (Priority 0 technical package, Devanagari font support, 17 migrations, and re-baselined school priorities)
 **Existing portal:** <https://pdav.webanlytic.in/software/login/index>  
 **School name displayed by the portal:** P DAV PUBLIC SCHOOL / PDAV PUBLIC SCHOOL  
 **Project folder:** repository root
@@ -65,7 +65,7 @@ The staging prototype currently demonstrates:
 
 **The synthetic deployment is ready for workflow review, but it is not production-approved.** Production policy sign-off, printer/font approval, private object storage, backup/recovery, live migration, school UAT and certificate samples remain. Fee-counter methods are manually recorded; there is no payment gateway or bank integration. Do not use the demo build to collect real money. See `PROGRESS.md` for the exact verified scope and `DEPLOYMENT.md` for the Render demo boundary.
 
-Verification on 17 October 2026: 82 backend tests across nine suites passed, with backend/frontend builds, frontend TypeScript, Prisma validation and a 16-migration local deployment. The browser contract suite must be rerun after the simplified manual-counter UI changes. Standalone lint is unconfigured; physical-printer, school UAT, certificate samples and production recovery checks remain open. Exact commands and test limitations are in `PROGRESS.md`.
+Verification on 30 October 2026: 82 backend tests across nine suites passed, with backend/frontend builds, frontend TypeScript, Prisma validation, 17 reviewed migrations, and Priority 0 Technical Package implemented (Devanagari TrueType font embedding in PDFKit, rate-limiting session pruning, and Family index cleanup). Standalone lint is unconfigured; physical-printer, school UAT, certificate sample provision and production recovery checks remain open. Exact commands and test limitations are in `PROGRESS.md`.
 
 | Document | Purpose |
 |---|---|
@@ -121,4 +121,4 @@ The demo deployment is a Render-hosted frontend Web Service, NestJS API Web Serv
 
 Version `0.6` — documentation reconciled with Levels 1–4, transport/store operations, academic lifecycle, imports/reports and manual fee-counter collection. Original audit evidence and observed rates remain historical evidence, not approved configuration. Certificates remain deferred pending current ERP samples. `/health` is implemented; Render deployment, external monitoring, hosting size/budget and operational recovery still need configuration and approval.
 
-**Next action:** deploy the latest synthetic-only changes to Render, apply all 16 migrations, run the documented browser/API/database verification, and review the remaining certificate samples and production approvals before any live import or real collection.
+**Next action:** deploy the latest synthetic-only changes to Render, apply all 17 migrations, run the documented browser/API/database verification, and implement student certificate generation once base physical/PDF templates (TC, SLC, Fee receipts) are provided in the project directory.
