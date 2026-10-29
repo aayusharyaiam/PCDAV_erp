@@ -296,7 +296,7 @@ The following is the full target contract. Current staging quotes accept `{ stud
 - **Cash:** captured at authorized collection; distinguish amount received from cash tendered/change.
 - **Manual electronic:** record submode and reference; require the school’s verification process before capture. A selected “GooglePay” label is not payment confirmation.
 - **Cheque:** Pending with details and acknowledgment; capture/settled receipt on clearance under the proposed default. A bounce assesses the approved charge once. If the school uses provisional numbered receipts, configure an explicitly provisional document series/status instead of marking it paid.
-- **Gateway, P1:** create provider order with immutable student/amount reference; verify signed webhook; validate amount/currency/order; deduplicate event; recover missed events through provider reconciliation. Browser redirect is not authoritative.
+- **Gateway / Online aggregator:** Excluded by school requirement. The website functions strictly as an internal administrative ledger for maintaining all fee collection records by school accountants and staff. In-person counter modes (Cash, UPI reference, Bank transfer reference, Cheque) are recorded directly without third-party gateways.
 - **Refund:** state machine with provider/bank reference; external execution and internal posting coordinated through idempotent commands/outbox and reconciliation. “Requested” is not “completed.”
 
 ## 8. Receipts and certificates

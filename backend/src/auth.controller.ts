@@ -16,6 +16,8 @@ export class AuthController {
     const email = body.email.trim().toLowerCase();
     const key = tokenHash(email);
     const allowed = await this.db.atomic(async tx => {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      await tx.loginAttempt.deleteMany({ where: { windowStart: { lt: oneHourAgo } } });
       const previous = await tx.loginAttempt.findUnique({ where: { key } });
       if (!previous || Date.now() - previous.windowStart.getTime() > 15 * 60 * 1000) {
         await tx.loginAttempt.upsert({ where: { key }, create: { key, attempts: 1, windowStart: new Date() }, update: { attempts: 1, windowStart: new Date() } });

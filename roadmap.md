@@ -46,8 +46,8 @@ Start data discovery in week 1. Migration, receipt samples, and financial rules 
 | D11 — P0 | Confirm the four-role hierarchy, Admin creation/deactivation rules, teacher classroom assignment, attendance correction approval, and promotion decision authority | Superadmin + administrator + principal | Permissions/UAT |
 | D12 — P0 | Real staff permissions, counters/shifts, correction authority and day-close process | Administrator + accountant | Permissions/UAT |
 | D13 — P0 | Hosting budget, backup retention, RPO/RTO, Render plan, health-check endpoint, uptime-alert recipient, internet/printers, support owner, cutover window | School + technical lead | Infrastructure/go-live |
-| D14 — P1 | Parent portal, gateway provider, reminder channels and message approvals | School + accountant | Integrations |
-| D15 — P1/P2 | Which store/finance/exam/front-office/app modules are genuinely used? Define continuity for each deferred module; attendance day-wise marking is already P0 | Department owners | Scope freeze / expansion |
+| D14 — Excluded | Payment gateway / online aggregator | Not needed | Excluded by school requirement: ERP is strictly an internal ledger for accountants and staff to maintain records |
+| D15 — P2 | Which store/finance/exam/front-office/app modules are genuinely used? Automated SMS and WhatsApp triggers deferred to later stages | Department owners | Scope freeze / expansion |
 
 Maintain a decision log with date, owner, answer, affected requirement and example calculation. An unresolved item should be a visible dependency, not a guessed rule buried in code.
 
@@ -68,21 +68,23 @@ These items are mandatory before any real student data is imported or live fees 
 7. **School User Acceptance Testing (UAT):** Conduct hands-on testing by real school operators across their specific roles: Principal, Accountant, Admissions Officer, and Class Teachers.
 8. **Live data migration rehearsal:** Execute dry-run imports with vendor export files, reconcile student opening balances and fee arrears against signed school totals, and practice delta cutover.
 
-### Priority 1 (P1) — Immediate operational additions
+### Priority 1 (P1) — Operational certificate printing
 
-Post-launch enhancements to increase automation and self-service:
+Enhancements to implement as soon as physical templates are provided:
 
-1. **Official school certificates:** Implement Transfer Certificate (TC/SLC), Character Certificate, and Bonafide Certificate templates and issuance workflows once approved school physical samples are provided.
-2. **Digital payment collection:** Integrate online UPI QR, payment gateway (e.g., Razorpay/Cashfree), or BBPS for parent online fee payments.
-3. **Automated parent communication:** Integrate SMS and WhatsApp gateways for automated fee dues reminders, attendance absence alerts, and payment confirmations.
-4. **Dedicated background worker separation:** Decouple PDF generation and heavy batch imports into a separate worker queue (e.g., pg-boss or BullMQ) as operational transaction volume increases.
+1. **Official student certificates (TC, SLC, Fee Receipts):** Certificates like Transfer Certificate (TC), School Leaving Certificate (SLC), Character Certificate, and customized Fee Receipts are to be added and printed with each student's complete details as soon as the base sample/template is provided in the project directory. Fee receipts already capture immutable snapshots; specialized certificate layouts will format directly against student records and dues clearance.
+2. **Dedicated background worker separation:** Decouple PDF generation and heavy batch imports into a separate worker queue (e.g., pg-boss or BullMQ) as operational transaction volume increases.
+3. **No payment gateway required:** By user requirement, no online payment gateway, parent portal, or external merchant aggregator (Razorpay, Cashfree, BBPS) is needed. The website is strictly designed as an internal operational ledger for maintaining all fee and enrollment records by school accountants and fee collection staff.
 
-### Priority 2 (P2) — Expanded ERP modules
+### Priority 2 (P2) — Expanded ERP modules and future automations
 
 Subsequent phases after the core school operating workflow is stable:
 
-1. **Examinations and grading:** Master marks registers, term-wise examinations, grading rules, and CBSE-compliant report card printing.
-2. **HR, payroll, and staff management:** Staff directory, leave applications/approvals, biometric attendance integration, and monthly salary disbursement slips.
+1. **Automated SMS and WhatsApp triggers:** Automated notifications for daily student absence, fee due reminders, and payment receipts will be introduced at this later stage.
+2. **Examinations and grading:** Master marks registers, term-wise examinations, grading rules, and CBSE-compliant report card printing.
+3. **HR, payroll, and staff management:** Staff directory, leave applications/approvals, biometric attendance integration, and monthly salary disbursement slips.
+4. **Timetable and substitutions:** Master class/teacher schedules, room allocations, and daily absent-teacher substitution tracking.
+5. **External accounting sync:** Double-entry journal voucher export into accounting software (Tally or Zoho Books).
 3. **Timetable and substitutions:** Master class/teacher schedules, room allocations, and daily absent-teacher substitution tracking.
 4. **External accounting sync:** Double-entry journal voucher export into accounting software (Tally or Zoho Books).
 
@@ -258,7 +260,7 @@ The foundation and demonstration work in this original checklist has since been 
 | 8 | Promotion and rollover | LFC-01 | D09, session/fee model |
 | 9 | Core reports and migration readiness | REP-03, MIG-01–MIG-03 | Run migration discovery from epic 1; finalize against complete model |
 | 10 | Teacher attendance and promotion decisions | ATT-01–ATT-04, LFC-01 | Role foundation, class assignments, D11 |
-| 11 | Parent/gateway/reminders | PAY-07–PAY-08, REP-04, DOC-02, SRV-02 | Stable core, D14 |
+| 11 | Student certificate printing (TC/SLC/Receipts) from directory samples | DOC-01–DOC-02, LFC-02 | Base samples in directory |
 | 12 | Remaining operational modules | Separate PRDs after discovery | D15 |
 
 ## 8. Go-live gate

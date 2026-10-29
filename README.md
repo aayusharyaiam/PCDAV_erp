@@ -91,6 +91,8 @@ Verification on 17 October 2026: 82 backend tests across nine suites passed, wit
 7. School leaving should preserve the student's identity, prior enrollments, receipts, and ledger. Use dated withdrawal/struck-off states and a leaving-certificate workflow.
 8. A new class/session must create a new enrollment, with an explicit fee-plan assignment. It must not overwrite the previous year's class or receipts.
 9. Several visible features could not be fully verified without executing business actions. The audit names these explicitly; proposed behavior is not presented as proven legacy behavior.
+10. **Internal staff ledger only:** No payment gateway or parent online portal is needed; the website functions strictly as an internal ledger for maintaining all student fee and operational records by school accountants and collection staff.
+11. **Student certificates and triggers:** Certificates like TC, SLC, and Fee receipts are to be added and printed with each student's details once base samples are provided in the directory. Automated SMS and WhatsApp triggers will be introduced at later stages.
 
 ## Confirmed role model
 

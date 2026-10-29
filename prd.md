@@ -65,13 +65,13 @@ The core operational workflow (Levels 1–4, transport/store operational managem
 - Role-based School User Acceptance Testing (Principal, Accountant, Admissions, Teacher).
 - Production data migration rehearsal and financial opening balance reconciliation.
 
-**P1 — Immediate operational extensions:**
-- School certificates (Transfer Certificate TC/SLC, Character Certificate, Bonafide Certificate) from approved physical samples.
-- Digital payment collection: Online UPI QR, payment gateway, and BBPS integration for parent online payments.
-- Automated parent communication: SMS and WhatsApp notifications for daily student absence, fee due reminders, and payment receipts.
+**P1 — Operational certificate printing:**
+- Official student certificates (TC, SLC, Fee Receipts): Certificates like Transfer Certificate (TC), School Leaving Certificate (SLC), Character Certificate, and Fee Receipts are to be added and printed with each student's complete details as soon as the base sample is provided in the project directory.
 - Dedicated background worker queue (e.g., pg-boss or BullMQ) for decoupled job processing.
+- No payment gateway: By school requirement, no online payment gateway or parent online portal is needed; the website operates as an internal ledger for maintaining all fee collection and operational records by school accountants and staff.
 
-**P2 — Expanded ERP modules:**
+**P2 — Expanded ERP modules and future automations:**
+- Automated communication: Automated SMS and WhatsApp triggers for student absence, dues reminders, and receipts will be introduced at this later stage.
 - Examinations and grading: Marks entry, grading rules, and CBSE-compliant report card printing.
 - HR, payroll, and staff management: Staff directory, leave workflows, biometric attendance, and monthly salary disbursement slips.
 - Timetable and substitutions: Master class/teacher schedules, room allocations, and daily absent-teacher substitution tracking.
@@ -160,7 +160,7 @@ Targets below are proposed acceptance targets, not measured legacy baselines.
 | PAY-04 / P0 | Idempotent atomic payment posting | Repeat submission returns the original committed result; two cashiers cannot over-allocate the same charge; failed transaction issues no valid receipt |
 | PAY-05 / P0 | Receipt issuance, retrieval, print/download and search | Unique number; immutable financial/identity snapshot; original issue date and payment references; reprint never collects money again or changes number |
 | PAY-06 / P0 | Reversal, refund, bounced cheque and correction | Mandatory reason and school-configured authority; Accountant requests exceptional changes and Admin approves/rejects them; original remains visible; balances and collections reflect linked compensating entries; no number reuse |
-| PAY-07 / P1 | Online gateway payment and reconciliation | Signed server event is authoritative; repeated events harmless; failed/abandoned flow issues no paid receipt; gateway settlement matched separately from payment capture |
+| PAY-07 / Excluded | Online payment gateway | Excluded by school requirement; system is strictly an internal ledger for accountants and staff to maintain records via Cash, manual UPI, Bank transfer, and Cheque |
 | PAY-08 / P1 | Optional family payment | One tender can allocate to authorized siblings with a transparent split; receipt policy defines family receipt or linked per-student receipts; no cross-child ambiguity |
 
 ### 6.6 Reporting and close

@@ -91,11 +91,14 @@ describe('Receipt PDF renderer', () => {
     if (status === 'VOID') expect(text).toContain('NOT A VALID PAYMENT RECEIPT');
   });
 
-  it('rejects unsupported Unicode rather than silently corrupting student/payer names', async () => {
+  it('supports Devanagari names and rejects unsupported Unicode rather than silently corrupting student/payer names', async () => {
     const receipt = original();
     receipt.snapshot.student.name = 'आरव शर्मा';
-    await expect(renderer.render(receipt)).rejects.toMatchObject({ code: 'UNSUPPORTED_TEXT' });
+    const devanagariPdf = await renderer.render(receipt);
+    expect(devanagariPdf.subarray(0, 5).toString()).toBe('%PDF-');
     receipt.snapshot.student.name = 'Jose\u0301';
+    await expect(renderer.render(receipt)).rejects.toMatchObject({ code: 'UNSUPPORTED_TEXT' });
+    receipt.snapshot.student.name = 'Emoji 🎓';
     await expect(renderer.render(receipt)).rejects.toMatchObject({ code: 'UNSUPPORTED_TEXT' });
     receipt.snapshot.student.name = 'José';
     expect(pdfPages(await renderer.render(receipt)).join('\n')).toContain('José');

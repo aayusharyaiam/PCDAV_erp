@@ -1,9 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export const RECEIPT_PDF_MAX_BYTES = 5 * 1024 * 1024;
 const MAX_PAGES = 100;
 const MAX_LINES = 2000;
+
+export const DEVANAGARI_REGEX = /[\u0900-\u097F]/;
+
+function resolveFont(filename: string): string | null {
+  const dirs = [
+    path.resolve(__dirname, '../assets/fonts'),
+    path.resolve(__dirname, '../../assets/fonts'),
+    path.resolve(process.cwd(), 'assets/fonts'),
+    path.resolve(process.cwd(), 'backend/assets/fonts'),
+  ];
+  for (const dir of dirs) {
+    const candidate = path.join(dir, filename);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
 
 export class ReceiptPdfRenderError extends Error {
   constructor(readonly code: 'INVALID_SNAPSHOT' | 'UNSUPPORTED_TEXT' | 'PDF_LIMIT_EXCEEDED') { super(code); }
@@ -20,12 +38,12 @@ function object(value: unknown): JsonObject {
   return value as JsonObject;
 }
 
-// Helvetica's WinAnsi repertoire, deliberately excluding controls, soft hyphens,
-// combining marks and unencoded glyphs. Never transliterate or drop a name.
+// Repertoire supporting Latin WinAnsi and Devanagari script (U+0900-U+097F plus joiners).
+// Deliberately excludes unencoded glyphs, controls, and uncomposed combining marks.
 export function receiptPdfText(value: unknown, optional = false): string {
   if (optional && (value === null || value === undefined || value === '')) return '';
   if (typeof value !== 'string' || !value.trim() || value.length > 2000) throw new ReceiptPdfRenderError('INVALID_SNAPSHOT');
-  if (!/^[\x20-\x7e\n\r\u00a0-\u00ac\u00ae-\u00ff\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc\u2013\u2014\u2018-\u201a\u201c-\u201e\u2020-\u2022\u2026\u2030\u2039\u203a\u20ac]+$/.test(value)) {
+  if (!/^[\x20-\x7e\n\r\u00a0-\u00ac\u00ae-\u00ff\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc\u2013\u2014\u2018-\u201a\u201c-\u201e\u2020-\u2022\u2026\u2030\u2039\u203a\u20ac\u0900-\u097F\u200C\u200D]+$/.test(value)) {
     throw new ReceiptPdfRenderError('UNSUPPORTED_TEXT');
   }
   return value;
@@ -75,10 +93,29 @@ export class ReceiptPdfRenderer {
       ];
     });
 
+    const devanagariRegular = resolveFont('NotoSansDevanagari-Regular.ttf');
+    const devanagariBold = resolveFont('NotoSansDevanagari-Bold.ttf');
+    const hasDevanagariSupport = !!(devanagariRegular && devanagariBold);
+
+    const containsDevanagari = (val: unknown): boolean => {
+      if (typeof val === 'string') return DEVANAGARI_REGEX.test(val);
+      if (Array.isArray(val)) return val.some(containsDevanagari);
+      if (val && typeof val === 'object') return Object.values(val).some(containsDevanagari);
+      return false;
+    };
+
+    if (containsDevanagari(snapshot) && !hasDevanagariSupport) {
+      throw new ReceiptPdfRenderError('UNSUPPORTED_TEXT');
+    }
+
     const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true, autoFirstPage: false, info: {
       Title: `Receipt ${receipt.receiptNumber} - ${receipt.status}`, Author: receiptPdfText(school.name),
       Subject: 'Immutable original payment receipt with current status', CreationDate: receipt.issuedAt,
     } });
+    if (hasDevanagariSupport) {
+      doc.registerFont('Devanagari', devanagariRegular!);
+      doc.registerFont('Devanagari-Bold', devanagariBold!);
+    }
     const chunks: Buffer[] = [];
     let bytes = 0;
     const completed = new Promise<Buffer>((resolve, reject) => {
@@ -95,22 +132,30 @@ export class ReceiptPdfRenderer {
     try {
       const width = 515.28, left = 40, bottom = 750;
       let y = 0, pages = 0;
+      const pickFont = (text: string, bold = false) => {
+        if (DEVANAGARI_REGEX.test(text) && hasDevanagariSupport) {
+          return bold ? 'Devanagari-Bold' : 'Devanagari';
+        }
+        return bold ? 'Helvetica-Bold' : 'Helvetica';
+      };
       const newPage = () => {
         if (++pages > MAX_PAGES) throw new ReceiptPdfRenderError('PDF_LIMIT_EXCEEDED');
         doc.addPage();
-        doc.font('Helvetica-Bold').fontSize(12).fillColor(receipt.status === 'ISSUED' ? '#16344a' : '#9b1616');
         const label = STATUS_LABELS[receipt.status];
+        doc.font(pickFont(label, true)).fontSize(12).fillColor(receipt.status === 'ISSUED' ? '#16344a' : '#9b1616');
         doc.text(label, left, 36, { width });
         y = doc.y + 7;
-        doc.fontSize(10).fillColor('#111111').text(`Receipt: ${receipt.receiptNumber}`, left, y, { width });
+        const receiptHeading = `Receipt: ${receipt.receiptNumber}`;
+        doc.font(pickFont(receiptHeading, false)).fontSize(10).fillColor('#111111').text(receiptHeading, left, y, { width });
         y = doc.y + 10;
         if (y > 200) throw new ReceiptPdfRenderError('PDF_LIMIT_EXCEEDED');
       };
       const block = (text: string, bold = false, size = 10) => {
-        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size);
+        const fontName = pickFont(text, bold);
+        doc.font(fontName).fontSize(size);
         const height = doc.heightOfString(text, { width }) + 6;
         if (y + height > bottom) newPage();
-        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor('#111111');
+        doc.font(fontName).fontSize(size).fillColor('#111111');
         if (y + height > bottom) throw new ReceiptPdfRenderError('PDF_LIMIT_EXCEEDED');
         doc.text(text, left, y, { width });
         y += height;
@@ -140,17 +185,19 @@ export class ReceiptPdfRenderer {
       block('Original allocations (INR) - values at issue, not current balances', true);
       const widths = [215.28, 75, 75, 75, 75];
       const tableRow = (cells: string[], header = false) => {
-        doc.font(header ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
-        const height = Math.max(...cells.map((cell, i) => doc.heightOfString(cell, { width: widths[i] - 10 }))) + 14;
+        const height = Math.max(...cells.map((cell, i) => {
+          doc.font(pickFont(cell, header)).fontSize(8);
+          return doc.heightOfString(cell, { width: widths[i] - 10 });
+        })) + 14;
         if (y + height > bottom) {
           newPage();
           if (!header) tableRow(['Allocation / source', 'Before', 'Credit', 'Payment', 'Remaining'], true);
         }
         if (y + height > bottom) throw new ReceiptPdfRenderError('PDF_LIMIT_EXCEEDED');
-        doc.font(header ? 'Helvetica-Bold' : 'Helvetica').fontSize(8).fillColor('#111111');
         if (header) doc.rect(left, y, width, height).fill('#e8eef2').fillColor('#111111');
         let x = left;
         cells.forEach((cell, i) => {
+          doc.font(pickFont(cell, header)).fontSize(8).fillColor('#111111');
           doc.text(cell, x + 5, y + 6, { width: widths[i] - 10, align: i === 0 ? 'left' : 'right' });
           x += widths[i];
         });

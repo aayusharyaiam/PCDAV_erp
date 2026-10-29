@@ -250,7 +250,7 @@ model Family {
   schoolId String
   label    String
 
-  @@unique([id, schoolId], map: "Enrollment_id_school_unique")
+  @@unique([id, schoolId], map: "Family_id_school_unique")
 }
 
 model Guardian {
@@ -332,7 +332,7 @@ model Enrollment {
   endDate     DateTime? @db.Date
 
   @@unique([schoolId, studentId, sessionId])
-  @@unique([id, schoolId])
+  @@unique([id, schoolId], map: "Enrollment_id_school_unique")
   @@index([schoolId, sessionId, classId, status])
 }
 

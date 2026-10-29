@@ -82,19 +82,19 @@
 7. **School User Acceptance Testing (UAT):** Conduct hands-on testing by real school operators across their specific roles: Principal, Accountant, Admissions Officer, and Class Teachers.
 8. **Live data migration rehearsal:** Execute dry-run imports with vendor export files, reconcile student opening balances and fee arrears against signed school totals, and practice delta cutover.
 
-### Priority 1 (P1) — Immediate operational additions
+### Priority 1 (P1) — Operational certificate printing
 
-1. **Official school certificates:** Implement Transfer Certificate (TC/SLC), Character Certificate, and Bonafide Certificate templates and issuance workflows once approved school physical samples are provided.
-2. **Digital payment collection:** Integrate online UPI QR, payment gateway (e.g., Razorpay/Cashfree), or BBPS for parent online fee payments.
-3. **Automated parent communication:** Integrate SMS and WhatsApp gateways for automated fee dues reminders, attendance absence alerts, and payment confirmations.
-4. **Dedicated background worker separation:** Decouple PDF generation and heavy batch imports into a separate worker queue (e.g., pg-boss or BullMQ) as operational transaction volume increases.
+1. **Official student certificates (TC, SLC, Fee Receipts):** Certificates like Transfer Certificate (TC), School Leaving Certificate (SLC), Character Certificate, and customized Fee Receipts are to be added and printed with each student's complete details as soon as the base sample/template is provided in the project directory.
+2. **Dedicated background worker separation:** Decouple PDF generation and heavy batch imports into a separate worker queue (e.g., pg-boss or BullMQ) as operational transaction volume increases.
+3. **No payment gateway required:** Confirmed requirement: no online payment gateway, parent portal, or external aggregator (Razorpay, Cashfree, BBPS) is needed. The website is strictly an internal ledger for maintaining all fee and operational records by school accountants and fee collection staff.
 
-### Priority 2 (P2) — Expanded ERP modules
+### Priority 2 (P2) — Expanded ERP modules and future automations
 
-1. **Examinations and grading:** Master marks registers, term-wise examinations, grading rules, and CBSE-compliant report card printing.
-2. **HR, payroll, and staff management:** Staff directory, leave applications/approvals, biometric attendance integration, and monthly salary disbursement slips.
-3. **Timetable and substitutions:** Master class/teacher schedules, room allocations, and daily absent-teacher substitution tracking.
-4. **External accounting sync:** Double-entry journal voucher export into accounting software (Tally or Zoho Books).
+1. **Automated SMS and WhatsApp triggers:** Automated notifications for daily student absence, fee due reminders, and payment receipts will be introduced at this later stage.
+2. **Examinations and grading:** Master marks registers, term-wise examinations, grading rules, and CBSE-compliant report card printing.
+3. **HR, payroll, and staff management:** Staff directory, leave applications/approvals, biometric attendance integration, and monthly salary disbursement slips.
+4. **Timetable and substitutions:** Master class/teacher schedules, room allocations, and daily absent-teacher substitution tracking.
+5. **External accounting sync:** Double-entry journal voucher export into accounting software (Tally or Zoho Books).
 
 ## Next milestone
 

@@ -18,6 +18,16 @@ async function bootstrap() {
   app.useGlobalFilters(new ApiErrors());
   app.use((_req: unknown, res: { setHeader: (key: string, value: string) => void }, next: () => void) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   const db = app.get(Db);
+  const cleanupStaleAuth = async () => {
+    try {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      await db.loginAttempt.deleteMany({ where: { windowStart: { lt: oneHourAgo } } });
+      await db.loginSession.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+    } catch { /* DB idle or connecting */ }
+  };
+  void cleanupStaleAuth();
+  const cleanupTimer = setInterval(() => void cleanupStaleAuth(), 30 * 60 * 1000);
+  cleanupTimer.unref();
   app.getHttpAdapter().get('/health', async (_req: unknown, res: { status: (code: number) => { send: (body: unknown) => void } }) => {
     try { await Promise.race([db.$queryRaw`SELECT 1`, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000).unref())]); res.status(200).send({ status: 'ok' }); }
     catch { res.status(503).send({ status: 'unavailable' }); }

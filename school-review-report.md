@@ -351,10 +351,11 @@ Please mark each item as **Approved**, **Change required**, or **Need discussion
 1. **Management review:** confirm the decisions in section 9 and sign off the fee circular.
 2. **Resolve technical priority gates:** embed Devanagari fonts in receipt PDFs, configure private S3 storage, add login rate-limit pruning, and correct the Family schema index.
 3. **Hardware and printer verification:** test receipt printing on the school's actual counter roll printers and laser printers.
-4. **Data preparation:** receive an authorised export and reconcile counts, dues, and opening balances.
-5. **User acceptance testing:** accountant, admissions operator, Admin, Teacher, and management test their own journeys.
-6. **Go-live rehearsal:** test backup restore, final import, printer output, permissions, and support process.
-7. **Production launch:** use one authorised collection system and reconcile every day during the first operating period.
+4. **Student certificates:** Certificates like TC, SLC, and Fee receipts are to be added and printed with each student's details once base samples are provided in the directory.
+5. **Data preparation:** receive an authorised export and reconcile counts, dues, and opening balances.
+6. **User acceptance testing:** accountant, admissions operator, Admin, Teacher, and management test their own journeys.
+7. **Go-live rehearsal:** test backup restore, final import, printer output, permissions, and support process.
+8. **Production launch:** use one authorised collection system and reconcile every day during the first operating period.
 
 ---
 
